@@ -21,3 +21,11 @@ Each pass records a smallest goal, test outcome, any failure and fix, and a comm
 ## Pass 2 — Capture and storage
 
 - **Plan:** Save an entire native tab group or a single tab with unique durable IDs, read back every record, close only unchanged saved tabs, and prove persistence over browser restart and failure-safe behavior.
+- **Done:** Worker snapshots tabs/group identity and page preview metadata, writes one record per card and group into local extension storage, verifies every write, optionally caches an active viewport in IndexedDB, opens the hub, and closes only tabs whose URL/group still match. Popup and page context-menu commands trigger one save operation.
+- **Test:** Three metadata/storage unit tests and five cumulative Chromium tests pass, including five messy fixture pages, single tab, injected write failure, mid-save navigation and a full profile restart.
+- **Failure/fix:** The test first sent a message from the worker to itself, which Chrome does not deliver; used an extension page as the sender. Chrome storage reorders object properties on read-back, so verification now compares normalized values rather than serialized property order.
+- **Commit:** `feat: save tab groups safely to local storage`.
+
+## Pass 3 — Visual hub and search
+
+- **Plan:** Render saved groups/cards with local screenshots or cached page previews, intentional no-image states, and search across title, site, note and fragment text; keep hundreds of cards responsive.
