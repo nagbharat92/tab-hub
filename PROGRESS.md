@@ -77,3 +77,10 @@ Each pass records a smallest goal, test outcome, any failure and fix, and a comm
 - **Done:** Added `HOW_IT_WORKS.md` covering the header, collections, cards, deliberate group/single-tab capture, passage and region marking, notes, optional AI, search, visual fallbacks, backups, privacy and current limits. A **How this works** header button renders that exact bundled Markdown inside a responsive, accessible dialog.
 - **Test:** `npm test` passes: 12 unit tests and 19 Chromium end-to-end tests. New coverage opens and closes the accessible Markdown dialog and checks that its full label remains visible at 390px width. The screenshot matrix was regenerated with the new header control.
 - **Commit:** `feat: add in-app How This Works guide`.
+
+## Post-release — Formatted guide copy and README
+
+- **Plan:** Let the in-app guide move cleanly into notes or documents, and make the same usage instructions visible on the GitHub repository front page.
+- **Done:** Added **Copy formatted text**, which writes semantic HTML and a plain-text alternative to the clipboard. Added `README.md` with project purpose, installation/development commands and the complete human-readable guide.
+- **Test:** `npm test` passes: 12 unit tests and 20 Chromium end-to-end tests. Coverage verifies the HTML and plain-text clipboard payloads, a real user-gesture clipboard write through the declared extension permission, the responsive copy control, and every earlier capture, fragment, backup, screenshot, real-URL and 600-card behavior.
+- **Commit:** `feat: copy guide as rich text and publish README`.
