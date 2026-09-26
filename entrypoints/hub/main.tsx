@@ -1,85 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ArrowUpRight, BookOpen, ImageOff, Layers3, Search, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { BookOpen, Layers3, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ReferenceCard } from "@/components/reference-card";
+import { chooseGuessProvider, noGuessProvider, type GuessProvider } from "@/src/guess";
 import { loadLibrary } from "@/src/library";
-import { getFragments, getImage, type Fragment, type FragmentRecord } from "@/src/media";
+import { getFragments, type FragmentRecord } from "@/src/media";
 import { searchCards } from "@/src/search";
-import { getOrCacheVisual } from "@/src/visuals";
 import type { SavedCard, SavedGroup } from "@/src/types";
 import "@/assets/theme.css";
 import "./hub.css";
 
 const PAGE_SIZE = 48;
-const date = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
-
-function Preview({ card, fragment }: { card: SavedCard; fragment?: Fragment }) {
-  const [source, setSource] = useState<string>();
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    let live = true;
-    let url: string | undefined;
-    setSource(undefined);
-    setFailed(false);
-    const imageId = fragment?.id ?? card.id;
-    void (fragment
-      ? getImage(imageId).then(image => image ?? getOrCacheVisual(card.id, card.previewUrl))
-      : getOrCacheVisual(card.id, card.previewUrl)).then(image => {
-      if (!live || !image) return;
-      url = URL.createObjectURL(image);
-      setSource(url);
-    }).catch(error => {
-      console.info(`Tab Hub: using text fallback for ${card.site}:`, error);
-      if (live) setFailed(true);
-    });
-    return () => { live = false; if (url) URL.revokeObjectURL(url); };
-  }, [card.id, card.previewUrl, fragment?.id]);
-  return (
-    <div className="card-visual">
-      {source && !failed
-        ? <img src={source} alt={fragment?.kind === "region" ? `Marked region from ${card.title}` : `Preview of ${card.title}`} onError={() => setFailed(true)} />
-        : <div className="visual-fallback" aria-label={`No image available for ${card.title}`}>
-            <span className="fallback-mark">{card.site.slice(0, 1).toUpperCase()}</span>
-            <span className="fallback-site">{card.site}</span>
-            <ImageOff size={19} strokeWidth={1.4} aria-hidden="true" />
-          </div>}
-    </div>
-  );
-}
-
-function ReferenceCard({ card, group, fragment }: { card: SavedCard; group?: SavedGroup; fragment?: Fragment }) {
-  const [iconFailed, setIconFailed] = useState(false);
-  const favicon = chrome.runtime.getURL(`/_favicon/?pageUrl=${encodeURIComponent(card.url)}&size=32`);
-  return (
-    <article className="reference-card" data-testid="reference-card">
-      <Preview card={card} fragment={fragment} />
-      <div className="card-content">
-        <div className="card-meta">
-          <span className="site-id">
-            {!iconFailed && <img width="16" height="16" src={favicon} alt="" onError={() => setIconFailed(true)} />}
-            {iconFailed && <span className="favicon-fallback" aria-hidden="true">{card.site.slice(0, 1).toUpperCase()}</span>}
-            <span className="site-name">{card.site}</span>
-          </span>
-          <span>{date.format(card.savedAt)}</span>
-        </div>
-        <h3 title={card.title}>{card.title}</h3>
-        {fragment?.kind === "text" && fragment.text && <blockquote>“{fragment.text}”</blockquote>}
-        {card.note && <p className="card-note">{card.note}</p>}
-        <div className="card-footer">
-          <Badge variant="secondary" className="group-badge">
-            <span className="group-marker" data-color={group?.color ?? "grey"} />
-            {group?.kind === "single" ? "Single tab" : group?.name ?? "Recovered"}
-          </Badge>
-          <Button variant="ghost" size="icon" aria-label={`Open ${card.title}`} title="Open source" onClick={() => chrome.tabs.create({ url: card.url })}>
-            <ArrowUpRight size={17} />
-          </Button>
-        </div>
-      </div>
-    </article>
-  );
-}
 
 function App() {
   const [groups, setGroups] = useState<SavedGroup[]>([]);
@@ -90,7 +23,14 @@ function App() {
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [provider, setProvider] = useState<GuessProvider>(noGuessProvider);
   const sentinel = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    void chooseGuessProvider().then(found => { if (mounted) setProvider(found); });
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -188,7 +128,7 @@ function App() {
               </div>
               {matching.length
                 ? <><div className="card-grid">{shown.map(card =>
-                    <ReferenceCard key={card.id} card={card} group={groupById.get(card.groupId)} fragment={fragments.get(card.id)?.items.at(-1)} />)}
+                    <ReferenceCard key={card.id} card={card} group={groupById.get(card.groupId)} fragments={fragments.get(card.id)} provider={provider} />)}
                   </div><div ref={sentinel} className="load-status" aria-live="polite">{visible < matching.length ? `Showing ${shown.length} of ${matching.length} references` : ""}</div></>
                 : <div className="no-results"><Search size={28} /><h3>No references found</h3><p>Try another word or choose a different collection.</p></div>}
             </section>

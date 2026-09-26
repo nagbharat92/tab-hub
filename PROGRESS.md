@@ -45,3 +45,11 @@ Each pass records a smallest goal, test outcome, any failure and fix, and a comm
 ## Pass 5 — Notes and optional model guesses
 
 - **Plan:** Make a card's notes and guess editable in a detail view, display all its fragments, and produce optional on-device guesses through a replaceable provider interface with a no-op fallback.
+- **Done:** Card detail shows all marked passages/regions, an editable note, and an editable guess when one exists or on-device AI is available. Notes and interpretations use separate verified local-storage keys; Escape/close cannot silently discard unsaved edits. A `GuessProvider` interface offers a no-op stub and Chrome's local `LanguageModel` implementation; only a model already reporting `available` is used, and user corrections are protected.
+- **Test:** Nine unit tests and ten Chromium tests pass. Browser tests confirm note search and restart persistence, absence of a guess without a model, generation with an injected on-device API, and correction surviving a reload.
+- **Failure/fix:** A new provider test was accidentally nested inside another test; moved it to its own case. The provider guard now accepts both object and constructor-shaped Chrome globals.
+- **Commit:** `feat: add editable notes and optional local AI guesses`.
+
+## Pass 6 — Design refinement
+
+- **Plan:** Capture light/dark, wide/narrow screenshots of empty, ten and several-hundred-card states; critique, fix the largest issues, and repeat until two rounds show no meaningful improvement.
