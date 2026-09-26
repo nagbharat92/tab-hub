@@ -1,59 +1,3 @@
-# Tab Hub
-
-Tab Hub is a private, local-first Chromium extension for turning tab groups and individual tabs into a visual reference library. It is designed for links you want to remember rather than tasks you need to finish.
-
-![Tab Hub with saved references](screenshots/ten-light-desktop.png)
-
-## What it does
-
-- Saves an entire browser tab group or one tab in a deliberate action.
-- Verifies every saved link before closing the original tabs.
-- Preserves group names, colours and tab order.
-- Shows visual cards with page previews, screenshots, marked passages or cropped regions.
-- Searches titles, websites, URLs, notes and saved passage text.
-- Keeps notes and optional Chrome on-device AI guesses editable.
-- Stores everything locally, with complete user-controlled export and import.
-
-## Install locally
-
-```bash
-npm ci
-npm run build
-```
-
-Then open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose:
-
-```text
-.output/chrome-mv3
-```
-
-Pin Tab Hub in the browser toolbar for one-click access.
-
-## Develop and test
-
-```bash
-npm run dev
-npm run typecheck
-npm test
-```
-
-WXT provides the Manifest V3 build and development reload flow. The automated suite uses persistent Playwright Chromium profiles to exercise the unpacked extension.
-
-## Claude planning handoff
-
-The tracked [`claude-handoff/`](claude-handoff/) folder is the small, uploadable planning bundle. It contains the product brief, current state, user guide, decisions, limits, a compact competitive summary and four synthetic UI screenshots—without source code or private saved-tab data.
-
-After every substantial completed task:
-
-```bash
-npm run handoff:claude
-npm run handoff:check
-```
-
-Upload the contents of that folder to Claude and ask it to begin with `START_HERE.md`. `npm test` fails when the bundle is stale.
-
----
-
 # How Tab Hub works
 
 Tab Hub turns tab groups and individual tabs into a visual reference library. It helps you close tabs without losing the pages—or the exact details—that made them worth keeping.
@@ -64,8 +8,8 @@ Tab Hub turns tab groups and individual tabs into a visual reference library. It
 
 ### The header
 
-- **How this works** opens the in-app guide.
-- **Copy formatted text** copies the guide with headings, emphasis and lists intact.
+- **How this works** opens this guide.
+- **Copy formatted text** copies this guide with headings, emphasis and lists intact.
 - **Export** downloads a complete private backup of your references.
 - **Import** restores a Tab Hub backup without overwriting conflicting local edits.
 
@@ -181,5 +125,3 @@ Use **Import** to restore the file. Tab Hub verifies identical existing records 
 - Removing the extension or deleting its browser profile can remove its local data, so keep an exported backup.
 - Chrome's own internal pages can be saved as links, but they may not allow screenshots or fragment capture.
 - Local `file://` pages may require **Allow access to file URLs** in the extension's Chrome settings.
-
-For the source used by the in-app dialog, see [`HOW_IT_WORKS.md`](HOW_IT_WORKS.md).

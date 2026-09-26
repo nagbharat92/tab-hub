@@ -1,0 +1,62 @@
+{
+  "format": "tab-hub-claude-handoff",
+  "version": 1,
+  "productVersion": "0.1.2",
+  "files": [
+    {
+      "path": "BLOCKERS.md",
+      "bytes": 1812,
+      "sha256": "d34ceb783725b3ec902462aee60c2bab5e155ee648f359ff4b2259ef523b1b45"
+    },
+    {
+      "path": "BRIEF.md",
+      "bytes": 6066,
+      "sha256": "eea95d0abe6b3a7d9cf04ac2db9fd0fa67d0bdc107f71a186b268f5ea4ec0251"
+    },
+    {
+      "path": "COMPETITIVE_CONTEXT.md",
+      "bytes": 1380,
+      "sha256": "9746129ea38d493f45bcb1f0dace49eacec2b5a26bf1b5b242b858217dca4cd3"
+    },
+    {
+      "path": "DECISIONS.md",
+      "bytes": 6741,
+      "sha256": "04d2d126211824be728c372b63b9cdcbf5564fa5d08e0bafa3ba17ee801edcdc"
+    },
+    {
+      "path": "HOW_IT_WORKS.md",
+      "bytes": 5281,
+      "sha256": "cd0d13e482af173d086051302e7dc39cf0bbf04cc7ceffec67c086baa6ccdd51"
+    },
+    {
+      "path": "screenshots/01-empty-light-desktop.png",
+      "bytes": 63034,
+      "sha256": "892967e7b2b642009d9176da4507f2fe73530997167664e26c5359e88a92862a"
+    },
+    {
+      "path": "screenshots/02-library-light-desktop.png",
+      "bytes": 269159,
+      "sha256": "754d1fccf8568d3097f61845139605e535ac86396e558d8b22330bd3e318aa22"
+    },
+    {
+      "path": "screenshots/03-library-dark-desktop.png",
+      "bytes": 262585,
+      "sha256": "ce8dfde74c094de0e76cb1dd69ff0d63f6cde5ad1d34d94bd00ad9802130b2bd"
+    },
+    {
+      "path": "screenshots/04-scale-dark-narrow.png",
+      "bytes": 45849,
+      "sha256": "73b533346c223d5a54832ff8b152f9e21dba7c111a08f7c9f200020a14bba384"
+    },
+    {
+      "path": "START_HERE.md",
+      "bytes": 1728,
+      "sha256": "62d55000f84bdf3ec4f00ceec887172683073299759a0d00b6234db7c2424fbf"
+    },
+    {
+      "path": "SUMMARY.md",
+      "bytes": 5362,
+      "sha256": "137d74accc7ef20f01bdaffc270c0e1d45023d6094a9a7b4708f578dde810d3d"
+    }
+  ]
+}

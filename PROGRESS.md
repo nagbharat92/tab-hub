@@ -84,3 +84,10 @@ Each pass records a smallest goal, test outcome, any failure and fix, and a comm
 - **Done:** Added **Copy formatted text**, which writes semantic HTML and a plain-text alternative to the clipboard. Added `README.md` with project purpose, installation/development commands and the complete human-readable guide.
 - **Test:** `npm test` passes: 12 unit tests and 20 Chromium end-to-end tests. Coverage verifies the HTML and plain-text clipboard payloads, a real user-gesture clipboard write through the declared extension permission, the responsive copy control, and every earlier capture, fragment, backup, screenshot, real-URL and 600-card behavior.
 - **Commit:** `feat: copy guide as rich text and publish README`.
+
+## Post-release — Curated Claude handoff
+
+- **Plan:** Preserve one small folder that can be uploaded for product/design brainstorming without granting repository access or spending context on source-code scanning.
+- **Done:** Added a deterministic `claude-handoff/` generator containing canonical product documents, a compact competitive summary, a ready-to-use discussion prompt and four synthetic screenshots. Added project and Copilot instructions requiring refresh after substantial work, plus a stale-bundle check in the standard test command.
+- **Test:** `npm run typecheck` and `npm test` pass: the bundle freshness gate runs alongside 12 unit and 20 Chromium end-to-end tests. A post-suite freshness check also protects against screenshot-producing tests changing a handoff asset.
+- **Commit:** `chore: maintain curated Claude planning handoff`.
