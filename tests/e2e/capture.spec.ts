@@ -109,7 +109,14 @@ test("a tab that navigates while saving is retained rather than closed", async (
         configurable: true,
         value: async (keys: string[]) => {
           const records = await originalGet(keys);
-          if (Array.isArray(keys) && keys.some(key => key.startsWith("card:"))) await chrome.tabs.update(tabId, { url: destination });
+          if (Array.isArray(keys) && keys.some(key => key.startsWith("card:"))) {
+            await chrome.tabs.update(tabId, { url: destination });
+            for (let attempt = 0; attempt < 20; attempt++) {
+              const tab = await chrome.tabs.get(tabId);
+              if (tab.url === destination || tab.pendingUrl === destination) break;
+              await new Promise(resolve => setTimeout(resolve, 20));
+            }
+          }
           return records;
         }
       });

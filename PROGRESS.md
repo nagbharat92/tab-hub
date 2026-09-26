@@ -29,3 +29,11 @@ Each pass records a smallest goal, test outcome, any failure and fix, and a comm
 ## Pass 3 — Visual hub and search
 
 - **Plan:** Render saved groups/cards with local screenshots or cached page previews, intentional no-image states, and search across title, site, note and fragment text; keep hundreds of cards responsive.
+- **Done:** Hub renders native groups and a separate individual-tab view, three-to-one-column responsive cards, date/site/title/group context, cached screenshot or bounded image preview, and a deliberate typographic fallback. Search joins metadata with IndexedDB fragment text; cards are revealed in batches of 48.
+- **Test:** Five cumulative unit tests and six Chromium tests pass. A fixture-based hub test checks group identity, five messy cards, a real blob-backed preview, no remote image URLs in rendered cards, no-image fallback and live search.
+- **Failure/fix:** A cumulative test exposed a navigation race: Chrome can report the old URL while `pendingUrl` already points somewhere new. Capture now checks both before closing and the navigation regression is repeated three times.
+- **Commit:** `feat: build visual searchable reference hub`.
+
+## Pass 4 — Fragments
+
+- **Plan:** Add an explicit selected-text action and a fast visible-region crop overlay, persist fragments in IndexedDB and attach them to existing matching cards or a new single card.

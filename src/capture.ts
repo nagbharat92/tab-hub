@@ -103,7 +103,7 @@ async function saveThenClose(tabs: chrome.tabs.Tab[], options: { name: string; c
     }
     try {
       const current = await chrome.tabs.get(tab.id);
-      if ((current.url || current.pendingUrl) !== card.url || (options.kind === "group" && current.groupId !== tab.groupId)) {
+      if (current.url !== card.url || (current.pendingUrl && current.pendingUrl !== card.url) || (options.kind === "group" && current.groupId !== tab.groupId)) {
         skipped++;
         warnings.push(`Tab ${index + 1} changed during saving and was left open.`);
         continue;

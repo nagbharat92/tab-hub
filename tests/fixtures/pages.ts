@@ -5,9 +5,9 @@ const longTitle = "A very long reference title about typographic rhythm, motion,
 export async function startFixtureServer(): Promise<{ base: string; close: () => Promise<void> }> {
   const server: Server = createServer((request, response) => {
     const path = new URL(request.url || "/", "http://localhost").pathname;
-    if (path === "/preview.svg") {
-      response.writeHead(200, { "content-type": "image/svg+xml" });
-      response.end('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500"><rect width="800" height="500" fill="#b11f4b"/><circle cx="400" cy="250" r="120" fill="#f7f4ef"/></svg>');
+    if (path === "/preview.png") {
+      response.writeHead(200, { "content-type": "image/png" });
+      response.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlAIf0AAAAASUVORK5CYII=", "base64"));
       return;
     }
     if (path === "/broken.ico") {
@@ -16,7 +16,7 @@ export async function startFixtureServer(): Promise<{ base: string; close: () =>
       return;
     }
     const title = path === "/long-title" ? longTitle : path === "/no-preview" ? "A page with no preview" : path === "/huge" ? "An enormously tall page" : path === "/blocked-frame" ? "Framing is blocked" : "Visual reference";
-    const preview = path === "/no-preview" ? "" : '<meta property="og:image" content="/preview.svg"><meta name="description" content="A carefully composed visual reference">';
+    const preview = path === "/no-preview" ? "" : '<meta property="og:image" content="/preview.png"><meta name="description" content="A carefully composed visual reference">';
     const favicon = path === "/broken-favicon" ? '<link rel="icon" href="/broken.ico">' : "";
     const body = path === "/huge" ? "<p>Long form reference content</p>".repeat(3000) : "<p>A small fragment worth remembering and searching for.</p>";
     response.writeHead(200, {
