@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BookOpen, Download, Layers3, Search, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { HowThisWorks } from "@/components/how-this-works";
 import { ReferenceCard } from "@/components/reference-card";
 import { exportBackup, importBackup } from "@/src/backup";
 import { chooseGuessProvider, noGuessProvider, type GuessProvider } from "@/src/guess";
@@ -130,6 +131,7 @@ function App() {
         <div className="brand"><BookOpen size={22} strokeWidth={1.7} /><span>Tab Hub</span></div>
         <div className="header-tools">
           <span className="eyebrow">A home for what caught your eye</span>
+          <HowThisWorks />
           <Button size="sm" variant="outline" disabled={backupBusy} aria-label="Export backup" onClick={() => void downloadBackup()}><Download size={15} /><span className="action-copy">Export</span></Button>
           <Button size="sm" variant="outline" disabled={backupBusy} aria-label="Import backup" onClick={() => archiveInput.current?.click()}><Upload size={15} /><span className="action-copy">Import</span></Button>
           <Input ref={archiveInput} type="file" accept=".tabhub,application/zip" className="sr-only" aria-label="Choose a Tab Hub backup" onChange={event => void restoreBackup(event)} />

@@ -70,3 +70,10 @@ Each pass records a smallest goal, test outcome, any failure and fix, and a comm
 - **Failures/fixes:** A Guardian redirect remained pending through the 45-second external navigation window; replaced that public URL with Mozilla and verified all 30 settled. Pending navigation could otherwise save an old URL or close a changed tab; capture now records the destination and checks both current/pending URLs. Earlier saves also opened redundant hub tabs; they now activate the existing hub. A newly added restricted-page test was accidentally placed inside a worker-evaluate callback; moved it to the test suite rather than weakening it.
 - **Final test:** `npm run typecheck` and `npm test` pass: 12 unit tests and 17 Chromium end-to-end tests, including the real URL, restart, screenshot and scale runs.
 - **Commit:** `feat: harden local data safety and verify real-world scale`.
+
+## Post-release — In-app guide
+
+- **Plan:** Explain the visible UI and its behaviors in plain language, keep that documentation in the repository, and make it accessible without leaving the hub.
+- **Done:** Added `HOW_IT_WORKS.md` covering the header, collections, cards, deliberate group/single-tab capture, passage and region marking, notes, optional AI, search, visual fallbacks, backups, privacy and current limits. A **How this works** header button renders that exact bundled Markdown inside a responsive, accessible dialog.
+- **Test:** `npm test` passes: 12 unit tests and 19 Chromium end-to-end tests. New coverage opens and closes the accessible Markdown dialog and checks that its full label remains visible at 390px width. The screenshot matrix was regenerated with the new header control.
+- **Commit:** `feat: add in-app How This Works guide`.

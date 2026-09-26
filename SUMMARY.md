@@ -9,6 +9,7 @@ Tab Hub is a locally stored Manifest V3 Chromium extension. WXT bundles a React/
 3. Open the popup while viewing a tab in a browser group and choose **Save “group name”**, or choose **Save this tab**. The original tabs close only after every URL and its group record have been written and read back. The hub opens or reuses an existing hub tab.
 4. Select text and use the **Save selected passage** page context menu, or choose **Mark a visible region** and drag over the page. The popup offers both marking actions too. Marking an unsaved page adds a card but does not close the tab.
 5. Search across titles, sites, notes and saved passage text. Open a card's **Details** to see every marked piece, edit a note or correct the model's tentative guess. Use **Export**/**Import** for complete local backups.
+6. Use **How this works** in the hub header for the complete plain-language guide rendered from [`HOW_IT_WORKS.md`](HOW_IT_WORKS.md).
 
 ## What is built
 
