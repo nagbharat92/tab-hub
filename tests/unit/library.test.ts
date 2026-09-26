@@ -19,6 +19,12 @@ describe("capture metadata", () => {
     expect(() => makeRecords([tab(1, "https://site.test"), tab(2)], { name: "Broken", color: "grey", kind: "group" })).toThrow(/no URL/);
   });
 
+  it("saves a pending destination rather than a tab's previous page", () => {
+    const navigating = { ...tab(1, "https://old.test"), pendingUrl: "https://new.test/reference" };
+    const { cards } = makeRecords([navigating], { name: "Loading", color: "grey", kind: "single" });
+    expect(cards[0]?.url).toBe("https://new.test/reference");
+  });
+
   it("requires a successful read-back of every saved record", async () => {
     const { group, cards } = makeRecords([tab(1, "https://example.com")], { name: "One", color: "grey", kind: "single" });
     const records: Record<string, unknown> = {};

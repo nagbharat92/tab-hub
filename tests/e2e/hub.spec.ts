@@ -9,17 +9,18 @@ test("hub displays native groups, local visuals and intentional fallbacks; searc
   try {
     const opened = await launch(profile);
     context = opened.context;
-    const urls = ["/long-title", "/no-preview", "/broken-favicon", "/huge", "/blocked-frame"].map(path => `${fixture.base}${path}`);
+    const urls = ["/long-title", "/no-preview", "/broken-preview", "/broken-favicon", "/huge", "/blocked-frame"].map(path => `${fixture.base}${path}`);
     const { groupId } = await createGroup(opened.worker, urls, "Collected for layout");
     const page = await context.newPage();
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     await page.goto(`chrome-extension://${opened.id}/hub.html`);
     const saved = await page.evaluate(id => chrome.runtime.sendMessage({ type: "capture-group", groupId: id }), groupId);
-    expect(saved).toMatchObject({ ok: true, result: { saved: 5 } });
-    await expect(page.getByTestId("reference-card")).toHaveCount(5);
+    expect(saved).toMatchObject({ ok: true, result: { saved: 6 } });
+    await expect(page.getByTestId("reference-card")).toHaveCount(6);
     await expect(page.getByRole("button", { name: /Collected for layout/ })).toBeVisible();
     await expect(page.getByLabel("No image available for A page with no preview")).toBeVisible();
+    await expect(page.getByLabel("No image available for A page with a broken preview")).toBeVisible();
     const image = page.getByTestId("reference-card").filter({ hasText: "An enormously tall page" }).locator(".card-visual img");
     await expect(image).toBeVisible();
     await expect.poll(() => image.evaluate(node => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
@@ -29,8 +30,32 @@ test("hub displays native groups, local visuals and intentional fallbacks; searc
     await page.getByRole("textbox", { name: "Search references" }).fill("no preview");
     await expect(page.getByTestId("reference-card")).toHaveCount(1);
     await page.getByRole("button", { name: "Clear search" }).click();
-    await expect(page.getByTestId("reference-card")).toHaveCount(5);
+    await expect(page.getByTestId("reference-card")).toHaveCount(6);
     expect(errors).toEqual([]);
+  } finally {
+    await context?.close();
+    await removeProfile(profile);
+    await fixture.close();
+  }
+});
+
+test("preview enrichment uses no more than four simultaneous local fetches", async () => {
+  const fixture = await startFixtureServer();
+  const profile = await newProfile();
+  let context: BrowserContext | undefined;
+  try {
+    const opened = await launch(profile);
+    context = opened.context;
+    const { groupId } = await createGroup(opened.worker, Array.from({ length: 10 }, (_, index) => `${fixture.base}/slow/${index}`));
+    const hub = await context.newPage();
+    await hub.goto(`chrome-extension://${opened.id}/hub.html`);
+    for (const other of context.pages()) {
+      if (other !== hub && other.url().startsWith(`chrome-extension://${opened.id}/hub.html`)) await other.close();
+    }
+    expect(await hub.evaluate(id => chrome.runtime.sendMessage({ type: "capture-group", groupId: id }), groupId)).toMatchObject({ ok: true, result: { saved: 10 } });
+    await expect(hub.getByTestId("reference-card")).toHaveCount(10);
+    await expect.poll(() => fixture.previewStats().requests).toBe(10);
+    expect(fixture.previewStats().peak).toBeLessThanOrEqual(4);
   } finally {
     await context?.close();
     await removeProfile(profile);

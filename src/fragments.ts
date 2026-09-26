@@ -92,6 +92,7 @@ export async function markText(tabId: number, selectedText?: string): Promise<Ma
     selection = injected?.result ?? selection;
   } catch (error) {
     if (!selectedText) throw new Error(`This page does not permit text selection capture: ${String(error)}`);
+    console.info("Tab Hub: selection geometry unavailable; saving selected text without a crop.", error);
   }
   const text = selectedText?.trim() || selection.text;
   if (!text) throw new Error("Select a passage first. No fragment was saved.");

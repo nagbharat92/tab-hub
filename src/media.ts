@@ -91,3 +91,44 @@ export async function getFragment(cardId: string): Promise<FragmentRecord | unde
   const record = await read<FragmentRecord | Fragment>("fragments", cardId) as FragmentRecord | Fragment | undefined;
   return record ? asRecord(record) : undefined;
 }
+
+export async function getImages(): Promise<{ id: string; image: Blob }[]> {
+  const database = await openDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = database.transaction("images", "readonly");
+      const store = transaction.objectStore("images");
+      const keys = store.getAllKeys();
+      const values = store.getAll();
+      transaction.oncomplete = () => {
+        if (keys.result.some(key => typeof key !== "string")) {
+          reject(new Error("An image has an invalid local identifier."));
+        } else {
+          resolve(keys.result.map((id, index) => ({ id: String(id), image: values.result[index] as Blob })));
+        }
+      };
+      transaction.onerror = () => reject(transaction.error ?? new Error("Could not read local images."));
+    });
+  } finally {
+    database.close();
+  }
+}
+
+export async function addImportedMedia(images: { id: string; image: Blob }[], fragments: FragmentRecord[]): Promise<void> {
+  if (!images.length && !fragments.length) return;
+  const database = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(["images", "fragments"], "readwrite");
+      const imageStore = transaction.objectStore("images");
+      const fragmentStore = transaction.objectStore("fragments");
+      for (const item of images) imageStore.add(item.image, item.id);
+      for (const record of fragments) fragmentStore.add(record);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error("Imported media could not be saved."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Imported media transaction was aborted."));
+    });
+  } finally {
+    database.close();
+  }
+}

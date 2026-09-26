@@ -14,6 +14,7 @@ test("a varied tab group saves every URL, closes only after save and survives re
     const { groupId, tabIds } = await createGroup(opened.worker, urls);
     const hub = await context.newPage();
     await hub.goto(`chrome-extension://${opened.id}/hub.html`);
+    const beforeHubs = await opened.worker.evaluate(() => chrome.tabs.query({}).then(tabs => tabs.filter(tab => tab.url?.startsWith(chrome.runtime.getURL("hub.html"))).length));
     const result = await hub.evaluate(groupId => chrome.runtime.sendMessage({ type: "capture-group", groupId }), groupId);
     expect(result, JSON.stringify(result)).toMatchObject({ ok: true, result: { saved: 5, closed: 5, skipped: 0 } });
     const state = await opened.worker.evaluate(async ids => {
@@ -22,6 +23,7 @@ test("a varied tab group saves every URL, closes only after save and survives re
       return { records, openOriginals: remaining.filter(tab => ids.includes(tab.id ?? -1)).length };
     }, tabIds);
     expect(state.openOriginals).toBe(0);
+    expect(await opened.worker.evaluate(() => chrome.tabs.query({}).then(tabs => tabs.filter(tab => tab.url?.startsWith(chrome.runtime.getURL("hub.html"))).length))).toBe(beforeHubs);
     const cards = Object.values(state.records).filter((item): item is { url: string } => typeof item === "object" && item !== null && "url" in item);
     expect(cards.map(card => card.url).sort()).toEqual(urls.sort());
     const group = Object.values(state.records).find((item): item is { name: string; color: string; cardIds: string[] } =>
@@ -120,6 +122,7 @@ test("a tab that navigates while saving is retained rather than closed", async (
           return records;
         }
       });
+
     }, { tabId: tab.id, destination: `${fixture.base}/two` });
     const result = await hub.evaluate(tabId => chrome.runtime.sendMessage({ type: "capture-tab", tabId }), tab.id);
     expect(result).toMatchObject({ ok: true, result: { saved: 1, closed: 0, skipped: 1 } });
@@ -128,5 +131,27 @@ test("a tab that navigates while saving is retained rather than closed", async (
     await context?.close();
     await removeProfile(profile);
     await fixture.close();
+  }
+});
+
+test("restricted browser pages retain their URL even when content cannot be inspected", async () => {
+  const profile = await newProfile();
+  let context: BrowserContext | undefined;
+  try {
+    const opened = await launch(profile);
+    context = opened.context;
+    const tab = await opened.worker.evaluate(() => chrome.tabs.create({ url: "chrome://settings/", active: false }));
+    if (tab.id === undefined) throw new Error("The restricted tab has no ID.");
+    const hub = await context.newPage();
+    await hub.goto(`chrome-extension://${opened.id}/hub.html`);
+    const result = await hub.evaluate(id => chrome.runtime.sendMessage({ type: "capture-tab", tabId: id }), tab.id);
+    expect(result).toMatchObject({ ok: true, result: { saved: 1, closed: 1 } });
+    await expect(hub.getByTestId("reference-card")).toHaveCount(1);
+    const urls = await hub.evaluate(async () => Object.values(await chrome.storage.local.get(null)).filter(item => item?.url).map(item => item.url as string));
+    expect(urls).toEqual(["chrome://settings/"]);
+    await expect(hub.getByTestId("reference-card").locator(".visual-fallback")).toBeVisible();
+  } finally {
+    await context?.close();
+    await removeProfile(profile);
   }
 });

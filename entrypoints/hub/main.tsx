@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { BookOpen, Layers3, Search, X } from "lucide-react";
+import { BookOpen, Download, Layers3, Search, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ReferenceCard } from "@/components/reference-card";
+import { exportBackup, importBackup } from "@/src/backup";
 import { chooseGuessProvider, noGuessProvider, type GuessProvider } from "@/src/guess";
 import { loadLibrary } from "@/src/library";
 import { getFragments, type FragmentRecord } from "@/src/media";
@@ -23,8 +24,12 @@ function App() {
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [backupStatus, setBackupStatus] = useState("");
+  const [backupError, setBackupError] = useState("");
+  const [backupBusy, setBackupBusy] = useState(false);
   const [provider, setProvider] = useState<GuessProvider>(noGuessProvider);
   const sentinel = useRef<HTMLDivElement>(null);
+  const archiveInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -79,12 +84,59 @@ function App() {
     return () => observer.disconnect();
   }, [visible, matching.length]);
 
+  async function downloadBackup() {
+    setBackupBusy(true);
+    setBackupError("");
+    setBackupStatus("");
+    try {
+      const { file, filename, result } = await exportBackup();
+      const url = URL.createObjectURL(file);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setBackupStatus(`Prepared a local backup of ${result.cards} references and ${result.fragments} marked pieces. Keep the downloaded file somewhere safe.`);
+    } catch (cause) {
+      setBackupError(`Backup export failed: ${String(cause)}`);
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
+  async function restoreBackup(event: React.ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    setBackupBusy(true);
+    setBackupError("");
+    setBackupStatus("");
+    try {
+      const result = await importBackup(file);
+      setBackupStatus(`Restored or verified ${result.cards} references, ${result.fragments} marked pieces and ${result.images} images.${result.alreadyPresent ? ` ${result.alreadyPresent} existing records were unchanged.` : ""}`);
+    } catch (cause) {
+      setBackupError(`Backup import failed: ${String(cause)}`);
+    } finally {
+      input.value = "";
+      setBackupBusy(false);
+    }
+  }
+
   return (
     <main className="shell">
       <header className="masthead">
         <div className="brand"><BookOpen size={22} strokeWidth={1.7} /><span>Tab Hub</span></div>
-        <span className="eyebrow">A home for what caught your eye</span>
+        <div className="header-tools">
+          <span className="eyebrow">A home for what caught your eye</span>
+          <Button size="sm" variant="outline" disabled={backupBusy} aria-label="Export backup" onClick={() => void downloadBackup()}><Download size={15} /><span className="action-copy">Export</span></Button>
+          <Button size="sm" variant="outline" disabled={backupBusy} aria-label="Import backup" onClick={() => archiveInput.current?.click()}><Upload size={15} /><span className="action-copy">Import</span></Button>
+          <Input ref={archiveInput} type="file" accept=".tabhub,application/zip" className="sr-only" aria-label="Choose a Tab Hub backup" onChange={event => void restoreBackup(event)} />
+        </div>
       </header>
+      {backupStatus && <p className="backup-status" role="status">{backupStatus}</p>}
+      {backupError && <p className="library-error" role="alert">{backupError}</p>}
       <section className={`intro ${cards.length ? "intro-compact" : ""}`}>
         <p className="eyebrow">Your reference library</p>
         {cards.length ? <h1>Your references<span className="title-stop">.</span></h1>

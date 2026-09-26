@@ -3,6 +3,25 @@ import { markRegion, markText } from "@/src/fragments";
 import { showRegionOverlay } from "@/src/region-overlay";
 import type { WorkerRequest, WorkerResponse } from "@/src/types";
 
+function isWorkerRequest(value: unknown): value is WorkerRequest {
+  if (value === null || typeof value !== "object" || !("type" in value)) return false;
+  switch (value.type) {
+    case "capture-tab":
+    case "mark-text":
+    case "start-region":
+      return "tabId" in value && typeof value.tabId === "number";
+    case "capture-group":
+      return "groupId" in value && typeof value.groupId === "number";
+    case "mark-region":
+      return "pageUrl" in value && typeof value.pageUrl === "string" &&
+        "rect" in value && value.rect !== null && typeof value.rect === "object";
+    case "open-hub":
+      return true;
+    default:
+      return false;
+  }
+}
+
 async function startRegion(tabId: number): Promise<null> {
   const [injected] = await chrome.scripting.executeScript({ target: { tabId }, func: showRegionOverlay });
   if (!injected) throw new Error("The region selector could not be opened on this page.");
@@ -57,7 +76,12 @@ export default defineBackground(() => {
     });
   });
 
-  chrome.runtime.onMessage.addListener((message: WorkerRequest, sender, respond: (response: WorkerResponse) => void) => {
+  chrome.runtime.onMessage.addListener((message: unknown, sender, respond: (response: WorkerResponse) => void) => {
+    if (!isWorkerRequest(message)) {
+      console.error("Tab Hub: invalid extension command.", message);
+      respond({ ok: false, error: "Invalid Tab Hub command." });
+      return false;
+    }
     const operation = message.type === "capture-group"
       ? captureGroup(message.groupId)
       : message.type === "capture-tab"

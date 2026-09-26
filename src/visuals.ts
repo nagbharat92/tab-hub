@@ -2,12 +2,34 @@ import { getImage, putImage } from "./media";
 
 const MAX_IMAGE_BYTES = 2_500_000;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"]);
+const MAX_SIMULTANEOUS_PREVIEWS = 4;
+let activePreviews = 0;
+const waiting: (() => void)[] = [];
+
+async function withPreviewSlot<T>(operation: () => Promise<T>): Promise<T> {
+  if (activePreviews >= MAX_SIMULTANEOUS_PREVIEWS) {
+    await new Promise<void>(resolve => waiting.push(resolve));
+  } else {
+    activePreviews++;
+  }
+  try {
+    return await operation();
+  } finally {
+    const next = waiting.shift();
+    if (next) next();
+    else activePreviews--;
+  }
+}
 
 export async function getOrCacheVisual(cardId: string, previewUrl?: string): Promise<Blob | undefined> {
   const existing = await getImage(cardId);
   if (existing || !previewUrl) return existing;
   const address = new URL(previewUrl);
   if (address.protocol !== "http:" && address.protocol !== "https:") return undefined;
+  return withPreviewSlot(() => fetchPreview(cardId, address));
+}
+
+async function fetchPreview(cardId: string, address: URL): Promise<Blob> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5_000);
   try {

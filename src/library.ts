@@ -18,7 +18,7 @@ export function makeRecords(
   if (!tabs.length) throw new Error("There are no tabs in this group to save.");
   const groupId = crypto.randomUUID();
   const cards = tabs.map((tab, order) => {
-    const url = tab.url || tab.pendingUrl;
+    const url = tab.pendingUrl || tab.url;
     if (!url) throw new Error(`Tab ${tab.id ?? order} has no URL; nothing was closed.`);
     try {
       new URL(url);
@@ -43,7 +43,7 @@ export function makeRecords(
 }
 
 interface Storage {
-  set(items: Record<string, SavedGroup | SavedCard>): Promise<void>;
+  set(items: Record<string, unknown>): Promise<void>;
   get(keys: string[]): Promise<Record<string, unknown>>;
 }
 
@@ -55,13 +55,12 @@ function normalized(value: unknown): unknown {
   return value;
 }
 
-function matchesStored(actual: unknown, expected: unknown): boolean {
+export function matchesStored(actual: unknown, expected: unknown): boolean {
   return JSON.stringify(normalized(actual)) === JSON.stringify(normalized(expected));
 }
 
-export async function persistAndConfirm(group: SavedGroup, cards: SavedCard[], storage: Storage = chrome.storage.local): Promise<void> {
-  const records: Record<string, SavedGroup | SavedCard> = { [groupKey(group.id)]: group };
-  for (const card of cards) records[cardKey(card.id)] = card;
+export async function persistRecordsAndConfirm(records: Record<string, unknown>, storage: Storage = chrome.storage.local): Promise<void> {
+  if (!Object.keys(records).length) return;
   await storage.set(records);
   const saved = await storage.get(Object.keys(records));
   for (const [key, value] of Object.entries(records)) {
@@ -69,6 +68,12 @@ export async function persistAndConfirm(group: SavedGroup, cards: SavedCard[], s
       throw new Error(`Save verification failed for ${key}; no tabs were closed.`);
     }
   }
+}
+
+export async function persistAndConfirm(group: SavedGroup, cards: SavedCard[], storage: Storage = chrome.storage.local): Promise<void> {
+  const records: Record<string, SavedGroup | SavedCard> = { [groupKey(group.id)]: group };
+  for (const card of cards) records[cardKey(card.id)] = card;
+  await persistRecordsAndConfirm(records, storage);
 }
 
 export async function loadLibrary(): Promise<Library> {

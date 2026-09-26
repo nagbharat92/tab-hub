@@ -21,8 +21,8 @@ function readPagePreview(): PagePreview {
     try {
       const url = new URL(raw, document.baseURI);
       if (url.protocol === "https:" || url.protocol === "http:") previewUrl = url.href;
-    } catch {
-      // Malformed page metadata should not prevent saving its URL.
+    } catch (error) {
+      console.info("Tab Hub: page preview URL was invalid; keeping its metadata.", error);
     }
   }
   return {
@@ -32,12 +32,23 @@ function readPagePreview(): PagePreview {
 }
 
 async function addPageMetadata(tab: chrome.tabs.Tab, card: SavedCard): Promise<void> {
-  if (!tab.id || !/^https?:/.test(card.url)) return;
+  if (!tab.id || tab.pendingUrl || !/^https?:/.test(card.url)) return;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    const [injected] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: readPagePreview });
+    const injectedOrTimeout = await Promise.race([
+      chrome.scripting.executeScript({ target: { tabId: tab.id }, func: readPagePreview }),
+      new Promise<undefined>(resolve => { timeout = setTimeout(() => resolve(undefined), 2_000); })
+    ]);
+    if (!injectedOrTimeout) {
+      console.info("Tab Hub: page preview timed out for", card.site);
+      return;
+    }
+    const [injected] = injectedOrTimeout;
     if (injected?.result) Object.assign(card, injected.result);
   } catch (error) {
     console.info("Tab Hub: page preview unavailable for", card.site, error);
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
 
@@ -89,7 +100,11 @@ async function saveThenClose(tabs: chrome.tabs.Tab[], options: { name: string; c
   const first = ordered[0];
   if (!first) throw new Error("No tabs were available to save.");
   try {
-    await chrome.tabs.create({ url: chrome.runtime.getURL("hub.html"), active: true, windowId: first.windowId });
+    const hubUrl = chrome.runtime.getURL("hub.html");
+    const windowTabs = await chrome.tabs.query({ windowId: first.windowId });
+    const existingHub = windowTabs.find(tab => tab.id !== undefined && tab.url?.startsWith(hubUrl));
+    if (existingHub?.id !== undefined) await chrome.tabs.update(existingHub.id, { active: true });
+    else await chrome.tabs.create({ url: hubUrl, active: true, windowId: first.windowId });
   } catch (error) {
     throw new Error(`Saved ${cards.length} links, but could not open the hub. Tabs were left open: ${String(error)}`);
   }
@@ -121,11 +136,14 @@ async function saveThenClose(tabs: chrome.tabs.Tab[], options: { name: string; c
 export async function captureGroup(groupId: number): Promise<CaptureResult> {
   const [source, tabs] = await Promise.all([chrome.tabGroups.get(groupId), chrome.tabs.query({ groupId })]);
   if (!tabs.length) throw new Error("This browser tab group is empty or no longer exists.");
+  if (tabs.some(tab => (tab.pendingUrl || tab.url)?.startsWith(chrome.runtime.getURL("")))) {
+    throw new Error("This group contains Tab Hub itself. Move that tab out of the group before saving; nothing was closed.");
+  }
   return captureTabs(tabs, { name: source.title?.trim() || "Untitled group", color: source.color, kind: "group" });
 }
 
 export async function captureTab(tabId: number): Promise<CaptureResult> {
   const tab = await chrome.tabs.get(tabId);
-  if (tab.url?.startsWith(chrome.runtime.getURL(""))) throw new Error("The Tab Hub page cannot be saved as a reference.");
+  if ((tab.pendingUrl || tab.url)?.startsWith(chrome.runtime.getURL(""))) throw new Error("The Tab Hub page cannot be saved as a reference.");
   return captureTabs([tab], { name: "Individual tabs", color: "grey", kind: "single" });
 }
