@@ -5,3 +5,4 @@ body { width: 320px; }
 .popup p { color: var(--cp-text-muted); font-size: 13px; margin: 12px 0 24px; }
 .popup-actions { display: grid; gap: 8px; margin-bottom: 8px; }
 .popup-feedback { padding: 12px; border-radius: 0.625rem; background: var(--cp-accent-soft); line-height: 1.5; }
+.popup-divider { height: 1px; background: var(--cp-border); margin: 8px 0; }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ArrowUpRight, BookOpen, Layers3, Scissors } from "lucide-react";
+import { ArrowUpRight, BookOpen, Crop, Highlighter, Layers3, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { WorkerRequest, WorkerResponse } from "@/src/types";
 import "@/assets/theme.css";
@@ -29,7 +29,13 @@ function Popup() {
     try {
       const response = await chrome.runtime.sendMessage<WorkerRequest, WorkerResponse>(request);
       if (!response.ok) throw new Error(response.error);
-      if (response.result) setFeedback(`Saved ${response.result.saved} links; ${response.result.closed} tabs closed.${response.result.warnings.length ? ` ${response.result.warnings.join(" ")}` : ""}`);
+      if (response.result && "saved" in response.result) {
+        setFeedback(`Saved ${response.result.saved} links; ${response.result.closed} tabs closed.${response.result.warnings.length ? ` ${response.result.warnings.join(" ")}` : ""}`);
+      } else if (response.result && "fragmentId" in response.result) {
+        setFeedback(`Passage saved${response.result.createdCard ? " as a new reference" : " on its existing card"}. Your tab remains open.`);
+      } else {
+        setFeedback("Drag a region on the page. Press Esc to cancel.");
+      }
     } catch (error) {
       setFeedback(`Save failed. Tabs remain open. ${String(error)}`);
     } finally {
@@ -48,6 +54,13 @@ function Popup() {
           </Button>}
           <Button disabled={busy} variant="outline" className="w-full justify-between" onClick={() => save({ type: "capture-tab", tabId: tab.id! })}>
             Save this tab <Scissors size={16} />
+          </Button>
+          <div className="popup-divider" />
+          <Button disabled={busy} variant="ghost" className="w-full justify-between" onClick={() => save({ type: "mark-text", tabId: tab.id! })}>
+            Mark selected text <Highlighter size={16} />
+          </Button>
+          <Button disabled={busy} variant="ghost" className="w-full justify-between" onClick={() => save({ type: "start-region", tabId: tab.id! })}>
+            Mark a visible region <Crop size={16} />
           </Button>
         </div>
       )}

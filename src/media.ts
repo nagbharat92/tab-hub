@@ -1,8 +1,14 @@
 export interface Fragment {
+  id: string;
   cardId: string;
   kind: "text" | "region";
   text: string;
   savedAt: number;
+}
+
+export interface FragmentRecord {
+  cardId: string;
+  items: Fragment[];
 }
 
 const DATABASE = "tab-hub-media";
@@ -22,17 +28,15 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 
-async function write(storeName: "images" | "fragments", value: Blob | Fragment, key?: string): Promise<void> {
+async function writeImage(key: string, value: Blob): Promise<void> {
   const database = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {
-      const transaction = database.transaction(storeName, "readwrite");
-      const store = transaction.objectStore(storeName);
-      if (key) store.put(value, key);
-      else store.put(value);
+      const transaction = database.transaction("images", "readwrite");
+      transaction.objectStore("images").put(value, key);
       transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error ?? new Error(`Could not store ${storeName}.`));
-      transaction.onabort = () => reject(transaction.error ?? new Error(`Storage aborted for ${storeName}.`));
+      transaction.onerror = () => reject(transaction.error ?? new Error("Could not store the image."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Image storage was aborted."));
     });
   } finally {
     database.close();
@@ -53,8 +57,37 @@ async function read<T>(storeName: "images" | "fragments", key?: string): Promise
   }
 }
 
-export const putImage = (cardId: string, image: Blob) => write("images", image, cardId);
-export const getImage = (cardId: string) => read<Blob>("images", cardId) as Promise<Blob | undefined>;
-export const putFragment = (fragment: Fragment) => write("fragments", fragment);
-export const getFragments = () => read<Fragment>("fragments") as Promise<Fragment[]>;
-export const getFragment = (cardId: string) => read<Fragment>("fragments", cardId) as Promise<Fragment | undefined>;
+function asRecord(value: FragmentRecord | Fragment): FragmentRecord {
+  return "items" in value ? value : { cardId: value.cardId, items: [value] };
+}
+
+export async function appendFragment(fragment: Fragment): Promise<void> {
+  const database = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction("fragments", "readwrite");
+      const store = transaction.objectStore("fragments");
+      const request = store.get(fragment.cardId);
+      request.onsuccess = () => {
+        const previous = request.result as FragmentRecord | Fragment | undefined;
+        store.put({ cardId: fragment.cardId, items: [...(previous ? asRecord(previous).items : []), fragment] } satisfies FragmentRecord);
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error("Could not save the fragment."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Fragment storage was aborted."));
+    });
+  } finally {
+    database.close();
+  }
+}
+
+export const putImage = (imageId: string, image: Blob) => writeImage(imageId, image);
+export const getImage = (imageId: string) => read<Blob>("images", imageId) as Promise<Blob | undefined>;
+export async function getFragments(): Promise<FragmentRecord[]> {
+  const records = await read<FragmentRecord | Fragment>("fragments") as (FragmentRecord | Fragment)[];
+  return records.map(asRecord);
+}
+export async function getFragment(cardId: string): Promise<FragmentRecord | undefined> {
+  const record = await read<FragmentRecord | Fragment>("fragments", cardId) as FragmentRecord | Fragment | undefined;
+  return record ? asRecord(record) : undefined;
+}

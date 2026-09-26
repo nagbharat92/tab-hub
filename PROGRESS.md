@@ -37,3 +37,11 @@ Each pass records a smallest goal, test outcome, any failure and fix, and a comm
 ## Pass 4 — Fragments
 
 - **Plan:** Add an explicit selected-text action and a fast visible-region crop overlay, persist fragments in IndexedDB and attach them to existing matching cards or a new single card.
+- **Done:** Page-selection context menu and popup action save passages (with a crop when the selection is visible); a temporary Shadow DOM overlay lets the user drag a visible region and saves a scaled crop. Fragment records append atomically in IndexedDB, preserve earlier marks, attach to the latest URL match, and refresh the hub. A mark on an unsaved page creates a card without closing the page.
+- **Test:** Five unit tests and eight Chromium tests pass. New end-to-end tests select text on a live fixture, preserve and search an older mark after a second mark, drag/crop a region, verify the image blob, and confirm unsaved-page marking keeps its tab open.
+- **Failure/fix:** The region overlay initially remained tinted while the screenshot was taken; it now hides for two animation frames before capture. No failing tests remained after this change.
+- **Commit:** `feat: capture passages and cropped page regions`.
+
+## Pass 5 — Notes and optional model guesses
+
+- **Plan:** Make a card's notes and guess editable in a detail view, display all its fragments, and produce optional on-device guesses through a replaceable provider interface with a no-op fallback.

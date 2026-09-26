@@ -40,8 +40,11 @@ export interface CaptureResult {
 export type WorkerRequest =
   | { type: "capture-tab"; tabId: number }
   | { type: "capture-group"; groupId: number }
+  | { type: "mark-text"; tabId: number; selectedText?: string }
+  | { type: "start-region"; tabId: number }
+  | { type: "mark-region"; pageUrl: string; rect: import("./region-overlay").PageRectangle }
   | { type: "open-hub" };
 
 export type WorkerResponse =
-  | { ok: true; result: CaptureResult | null }
+  | { ok: true; result: CaptureResult | import("./fragments").MarkResult | null }
   | { ok: false; error: string };

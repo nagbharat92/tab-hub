@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { loadLibrary } from "@/src/library";
-import { getFragments, type Fragment } from "@/src/media";
+import { getFragments, getImage, type Fragment, type FragmentRecord } from "@/src/media";
 import { searchCards } from "@/src/search";
 import { getOrCacheVisual } from "@/src/visuals";
 import type { SavedCard, SavedGroup } from "@/src/types";
@@ -21,7 +21,12 @@ function Preview({ card, fragment }: { card: SavedCard; fragment?: Fragment }) {
   useEffect(() => {
     let live = true;
     let url: string | undefined;
-    void getOrCacheVisual(card.id, card.previewUrl).then(image => {
+    setSource(undefined);
+    setFailed(false);
+    const imageId = fragment?.id ?? card.id;
+    void (fragment
+      ? getImage(imageId).then(image => image ?? getOrCacheVisual(card.id, card.previewUrl))
+      : getOrCacheVisual(card.id, card.previewUrl)).then(image => {
       if (!live || !image) return;
       url = URL.createObjectURL(image);
       setSource(url);
@@ -30,7 +35,7 @@ function Preview({ card, fragment }: { card: SavedCard; fragment?: Fragment }) {
       if (live) setFailed(true);
     });
     return () => { live = false; if (url) URL.revokeObjectURL(url); };
-  }, [card.id, card.previewUrl, fragment?.savedAt]);
+  }, [card.id, card.previewUrl, fragment?.id]);
   return (
     <div className="card-visual">
       {source && !failed
@@ -79,7 +84,7 @@ function ReferenceCard({ card, group, fragment }: { card: SavedCard; group?: Sav
 function App() {
   const [groups, setGroups] = useState<SavedGroup[]>([]);
   const [cards, setCards] = useState<SavedCard[]>([]);
-  const [fragments, setFragments] = useState<Map<string, Fragment>>(new Map());
+  const [fragments, setFragments] = useState<Map<string, FragmentRecord>>(new Map());
   const [selected, setSelected] = useState("all");
   const [query, setQuery] = useState("");
   const [visible, setVisible] = useState(PAGE_SIZE);
@@ -183,7 +188,7 @@ function App() {
               </div>
               {matching.length
                 ? <><div className="card-grid">{shown.map(card =>
-                    <ReferenceCard key={card.id} card={card} group={groupById.get(card.groupId)} fragment={fragments.get(card.id)} />)}
+                    <ReferenceCard key={card.id} card={card} group={groupById.get(card.groupId)} fragment={fragments.get(card.id)?.items.at(-1)} />)}
                   </div><div ref={sentinel} className="load-status" aria-live="polite">{visible < matching.length ? `Showing ${shown.length} of ${matching.length} references` : ""}</div></>
                 : <div className="no-results"><Search size={28} /><h3>No references found</h3><p>Try another word or choose a different collection.</p></div>}
             </section>
