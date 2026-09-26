@@ -59,9 +59,9 @@ function Preview({ card, fragment }: { card: SavedCard; fragment?: Fragment }) {
       {source && !failed
         ? <img src={source} alt={fragment?.kind === "region" ? `Marked region from ${card.title}` : `Preview of ${card.title}`} onError={() => setFailed(true)} />
         : <div className="visual-fallback" aria-label={`No image available for ${card.title}`}>
-            <span className="fallback-mark">{card.site.slice(0, 1).toUpperCase()}</span>
-            <span className="fallback-site">{card.site}</span>
-            <ImageOff size={19} strokeWidth={1.4} aria-hidden="true" />
+            <span className="fallback-kicker">{fragment?.text ? "A marked detail" : card.site}</span>
+            <span className="fallback-headline">{fragment?.text ? `“${fragment.text}”` : card.title}</span>
+            <span className="fallback-bottom"><span>Saved reference</span><ImageOff size={17} strokeWidth={1.4} aria-hidden="true" /></span>
           </div>}
     </div>
   );

@@ -87,7 +87,8 @@ function App() {
       </header>
       <section className={`intro ${cards.length ? "intro-compact" : ""}`}>
         <p className="eyebrow">Your reference library</p>
-        <h1>Keep the thought.<br /><em>Close the tabs.</em></h1>
+        {cards.length ? <h1>Your references<span className="title-stop">.</span></h1>
+          : <h1>Keep the thought.<br /><em>Close the tabs.</em></h1>}
         <p>{cards.length ? `${cards.length} references, saved from ${nativeGroups.length} groups${looseCount ? ` and ${looseCount} individual tabs` : ""}.` : "Your groups and the pieces worth remembering will live here."}</p>
       </section>
       {error && <p className="library-error" role="alert">{error}</p>}

@@ -53,3 +53,14 @@ Each pass records a smallest goal, test outcome, any failure and fix, and a comm
 ## Pass 6 — Design refinement
 
 - **Plan:** Capture light/dark, wide/narrow screenshots of empty, ten and several-hundred-card states; critique, fix the largest issues, and repeat until two rounds show no meaningful improvement.
+- **Round 1 screenshots:** Twelve synthetic-data captures (both themes, desktop/narrow, empty/ten/420) saved outside the repo while iterating.
+- **Round 1 critique:** The empty state feels calm and has a clear single instruction; light/dark typography and group markers hold up. Three issues dominate: (1) the promotional two-line hero stays huge after references exist, consuming too much of a 900px desktop viewport; (2) it also pushes the first meaningful card almost entirely below the fold on narrow screens, while group chips shrink enough to clip counts; (3) image-less cards rely on repeated giant site initials, which are pretty but do not reveal why a specific page was saved. Next round will replace the populated-state hero with a compact library heading, make mobile group chips non-shrinking and put title/fragment content into the visual fallback.
+- **Round 2 screenshots/critique:** Repeated all twelve states. The populated desktop now shows an entire first row, mobile reveals useful card content earlier, and text-bearing fallback panels give each page an identity. One substantive regression remains: shadcn's button `white-space: nowrap` leaks into the visual fallback, so long headings are visibly cut off in both themes. Fix that inheritance, then recheck all layouts.
+- **Round 3 screenshots/critique:** Long fallback titles and marked passages now wrap naturally within a three-line cover in both themes. The 420-item view retains readable group counts, the first card and search above the fold, and the ten-item layout stays orderly at narrow width. The intentional fallback sometimes repeats a title from the body, but replacing it with another arbitrary decoration would reduce recall; no other material issue was found.
+- **Round 4/final critique:** Repeated all twelve screenshots without changes and inspected empty narrow and populated dark desktop states. Typography, density, contrast and missing-image states remained stable; no meaningful improvement justified further decoration. Final synthetic screenshots are in `screenshots/`.
+- **Test:** Nine unit tests and eleven Chromium tests pass, including the repeatable screenshot capture test.
+- **Commit:** `design: refine hub density and save visual-state screenshots`.
+
+## Pass 7 — Hardening
+
+- **Plan:** Test a 30-tab group with varied real URLs, hundreds of cards with performance checks, restricted/failed media, browser restart and data safety; resolve failures and write installation/limitations summary.
