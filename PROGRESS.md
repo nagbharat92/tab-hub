@@ -13,3 +13,11 @@ Each pass records a smallest goal, test outcome, any failure and fix, and a comm
 ## Pass 1 — Skeleton
 
 - **Plan:** Configure a bundled MV3 extension with React hub/popup, tokenized Tailwind/shadcn components, and a persistent-Chrome Playwright test that loads the unpacked build.
+- **Done:** WXT generates local MV3 hub, popup and service worker bundles; React 19, Tailwind and registry-generated shadcn/ui components share light/dark CSS variables. The popup opens the hub. Added a Playwright persistent-profile harness and a console-clean unpacked-load test.
+- **Test:** `npm run typecheck`, `npm run build`, and the Playwright extension-load test pass.
+- **Failure/fix:** WXT's generated TypeScript configuration needed explicit React JSX mode, and shadcn's generated component imports needed `lib/utils.ts`. Branded Chrome 154 did not expose a side-loaded service worker in headless testing; switched the harness to Playwright's Chromium channel, which did.
+- **Commit:** `feat: scaffold MV3 extension and browser test harness`.
+
+## Pass 2 — Capture and storage
+
+- **Plan:** Save an entire native tab group or a single tab with unique durable IDs, read back every record, close only unchanged saved tabs, and prove persistence over browser restart and failure-safe behavior.
