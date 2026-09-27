@@ -2,7 +2,7 @@
 
 This is a deliberately small snapshot of Tab Hub for product and design discussion. It contains **no source code**, dependencies, test traces, real saved-tab data or private backups.
 
-**Product version:** 0.2.0
+**Product version:** 0.2.1
 
 ## Suggested reading order
 

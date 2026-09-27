@@ -34,10 +34,10 @@ function Popup() {
       } else if (response.result && "fragmentId" in response.result) {
         setFeedback(`Passage saved${response.result.createdCard ? " as a new reference" : " on its existing card"}. Your tab remains open.`);
       } else {
-        setFeedback("Drag a region on the page. Press Esc to cancel.");
+        window.close();
       }
     } catch (error) {
-      setFeedback(`Save failed. Tabs remain open. ${String(error)}`);
+      setFeedback(`${request.type === "start-region" ? "Could not start region capture" : "Save failed. Tabs remain open"}. ${String(error)}`);
     } finally {
       setBusy(false);
     }

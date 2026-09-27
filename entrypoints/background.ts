@@ -3,6 +3,8 @@ import { markRegion, markText } from "@/src/fragments";
 import { showRegionOverlay } from "@/src/region-overlay";
 import type { WorkerRequest, WorkerResponse } from "@/src/types";
 
+const pendingRegions = new Map<number, Promise<Awaited<ReturnType<typeof markRegion>>>>();
+
 function isWorkerRequest(value: unknown): value is WorkerRequest {
   if (value === null || typeof value !== "object" || !("type" in value)) return false;
   switch (value.type) {
@@ -23,9 +25,21 @@ function isWorkerRequest(value: unknown): value is WorkerRequest {
 }
 
 async function startRegion(tabId: number): Promise<null> {
+  if (pendingRegions.has(tabId)) throw new Error("This region is still saving. Wait for it to finish before marking another.");
   const [injected] = await chrome.scripting.executeScript({ target: { tabId }, func: showRegionOverlay });
   if (!injected) throw new Error("The region selector could not be opened on this page.");
   return null;
+}
+
+function saveRegion(tabId: number, pageUrl: string, rect: Parameters<typeof markRegion>[2]): Promise<Awaited<ReturnType<typeof markRegion>>> {
+  if (pendingRegions.has(tabId)) return Promise.reject(new Error("This region is still saving. Wait for it to finish before marking another."));
+  const operation = markRegion(tabId, pageUrl, rect);
+  pendingRegions.set(tabId, operation);
+  void operation.then(
+    () => pendingRegions.delete(tabId),
+    () => pendingRegions.delete(tabId)
+  );
+  return operation;
 }
 
 export default defineBackground(() => {
@@ -92,7 +106,7 @@ export default defineBackground(() => {
             ? startRegion(message.tabId)
             : message.type === "mark-region"
               ? sender.tab?.id !== undefined
-                ? markRegion(sender.tab.id, message.pageUrl, message.rect)
+                ? saveRegion(sender.tab.id, message.pageUrl, message.rect)
                 : Promise.reject(new Error("A region must be marked on a live page."))
               : message.type === "open-hub"
                 ? chrome.tabs.create({ url: chrome.runtime.getURL("hub.html") }).then(() => null)

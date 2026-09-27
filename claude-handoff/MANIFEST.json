@@ -1,12 +1,12 @@
 {
   "format": "tab-hub-claude-handoff",
   "version": 1,
-  "productVersion": "0.2.0",
+  "productVersion": "0.2.1",
   "files": [
     {
       "path": "BLOCKERS.md",
-      "bytes": 1893,
-      "sha256": "5ebd798fd9b8cfc0586d941ba5b28c3db32eff58e2131950739bfeba85aedd59"
+      "bytes": 1849,
+      "sha256": "fe5cbf3828879306b9da704966748381c7dd69140537a309a452f8e22912dc76"
     },
     {
       "path": "BRIEF.md",
@@ -20,13 +20,13 @@
     },
     {
       "path": "DECISIONS.md",
-      "bytes": 8576,
-      "sha256": "bf1a5922d506848606d0b03c7717392d6557e398e5c7d1afe10130065c3f9695"
+      "bytes": 9407,
+      "sha256": "9312b0b822b24e823e73b8f69babf67c119a5ee99958d6fc735adf952f17c1d7"
     },
     {
       "path": "HOW_IT_WORKS.md",
-      "bytes": 7183,
-      "sha256": "63d1806d00ad9ef86d792e2703649b1dc43e3607c742b0d2b23a31f9a8c0792f"
+      "bytes": 7554,
+      "sha256": "659397f1505f36837e5fa9aa7c3551d1b45562386cbdaaf71d218994fa6a3da1"
     },
     {
       "path": "screenshots/01-empty-light-desktop.png",
@@ -56,12 +56,12 @@
     {
       "path": "START_HERE.md",
       "bytes": 2445,
-      "sha256": "7dfffb063f58f62a5a3c0bbe2d292f11473e37852c55881dcb6c7677f2b33cb9"
+      "sha256": "dd97cc396481583eb26d36ac52f1f8b0f37eca797b63abd84ae0537e17cef462"
     },
     {
       "path": "SUMMARY.md",
-      "bytes": 6349,
-      "sha256": "493041e23fbe0699bd209abdd9a703c73f515f5fb6bbc65d72f0d7e1380a14fe"
+      "bytes": 6459,
+      "sha256": "6b5ddfdc3a4083f5e9221b513a9f3a3f72592383fc033a97872a310fd9ed3caa"
     }
   ]
 }

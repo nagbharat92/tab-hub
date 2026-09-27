@@ -55,7 +55,25 @@ async function cropVisible(tabId: number, rectangle: PageRectangle): Promise<Blo
       x < 0 || y < 0 || x + width > viewportWidth + 1 || y + height > viewportHeight + 1) {
     throw new Error("The selected region is outside the visible page.");
   }
-  const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+  let leftTab = false;
+  const activated = (info: { windowId: number; tabId: number }) => {
+    if (info.windowId === tab.windowId && info.tabId !== tabId) leftTab = true;
+  };
+  chrome.tabs.onActivated.addListener(activated);
+  let screenshot: string;
+  try {
+    const current = await chrome.tabs.get(tabId);
+    if (!current.active || current.url !== tab.url || current.pendingUrl) {
+      throw new Error("The page changed before capture; select the region again.");
+    }
+    screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+    const after = await chrome.tabs.get(tabId);
+    if (leftTab || !after.active || after.url !== tab.url || after.pendingUrl) {
+      throw new Error("The active page changed during capture; select the region again.");
+    }
+  } finally {
+    chrome.tabs.onActivated.removeListener(activated);
+  }
   const image = await createImageBitmap(await (await fetch(screenshot)).blob());
   try {
     const scaleX = image.width / viewportWidth;

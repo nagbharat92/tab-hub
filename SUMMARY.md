@@ -1,6 +1,6 @@
 # Tab Hub: delivery summary
 
-Tab Hub 0.2.0 is a locally stored Manifest V3 Chromium extension. WXT bundles a React/TypeScript/Tailwind/shadcn/ui popup, background worker and light/dark hub with no server, account, remote code or CDN.
+Tab Hub 0.2.1 is a locally stored Manifest V3 Chromium extension. WXT bundles a React/TypeScript/Tailwind/shadcn/ui popup, background worker and light/dark hub with no server, account, remote code or CDN.
 
 ## Install and use
 
@@ -35,7 +35,7 @@ Tab Hub 0.2.0 is a locally stored Manifest V3 Chromium extension. WXT bundles a 
 | User-controlled recovery | `tests/e2e/backup.spec.ts` exports/imports metadata, note, guess, fragment and image in a second browser profile and rejects conflicts |
 | Reversible archive for card, bulk selection and group | `tests/e2e/archive.spec.ts` checks individual/bulk/collection flows, partial restore, restart, backup preservation and failure safety; `tests/unit/archive.test.ts` checks visibility and storage invariants |
 
-The final suite passes **18 unit tests and 26 Chromium end-to-end tests**. Screenshots use synthetic data; the real-URL run uses public pages. The on-device model's actual presence on your own Chrome installation has not been asserted.
+The final suite passes **18 unit tests and 35 Chromium end-to-end tests**, including region-capture regression cases for stale overlays, popup focus, retries and in-flight tab changes. Screenshots use synthetic data; the real-URL run uses public pages. The on-device model's actual presence on your own Chrome installation has not been asserted.
 
 ## Decisions, limits and next work
 

@@ -35,7 +35,8 @@ export async function startFixtureServer(): Promise<{ base: string; previewStats
     const body = path === "/huge" ? "<p>Long form reference content</p>".repeat(3000) : "<p>A small fragment worth remembering and searching for.</p>";
     response.writeHead(200, {
       "content-type": "text/html; charset=utf-8",
-      ...(path === "/blocked-frame" ? { "x-frame-options": "DENY", "content-security-policy": "frame-ancestors 'none'" } : {})
+      ...(path === "/blocked-frame" ? { "x-frame-options": "DENY", "content-security-policy": "frame-ancestors 'none'" } : {}),
+      ...(path === "/trusted-types" ? { "content-security-policy": "require-trusted-types-for 'script'" } : {})
     });
     response.end(`<!doctype html><html><head><title>${title}</title>${preview}${favicon}</head><body><h1>${title}</h1>${body}</body></html>`);
   });

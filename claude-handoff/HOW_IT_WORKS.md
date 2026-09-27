@@ -94,7 +94,7 @@ The passage appears on the matching card and becomes searchable. If the page was
 2. Drag a rectangle around the visible part you want to remember.
 3. Release to save the crop.
 
-Press **Esc** to cancel. Only the visible part of the current page can be cropped.
+The extension popup closes so you can drag directly on the page. Press **Esc** to cancel. Only the visible part of the current page can be cropped. Wait for a crop to finish before starting another; switching tabs during capture cancels it rather than saving the wrong page. If a capture fails, its error stays visible until you dismiss it; choose **Mark a visible region** again to retry. Some browser-protected pages do not allow the selector to open.
 
 ## Add notes and correct the guess
 

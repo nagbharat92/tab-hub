@@ -8,7 +8,11 @@ export interface PageRectangle {
 }
 
 export function showRegionOverlay(): void {
-  if (document.getElementById("tab-hub-region-overlay")) return;
+  const previous = document.getElementById("tab-hub-region-overlay");
+  if (previous) {
+    previous.dispatchEvent(new Event("tab-hub-dispose"));
+    previous.remove();
+  }
   const host = document.createElement("div");
   host.id = "tab-hub-region-overlay";
   host.style.cssText = "position:fixed;inset:0;z-index:2147483647;";
@@ -35,21 +39,25 @@ export function showRegionOverlay(): void {
   }
 
   let start: { x: number; y: number } | undefined;
+  const controller = new AbortController();
+  let removalTimer: ReturnType<typeof setTimeout> | undefined;
   function destroy() {
-    document.removeEventListener("keydown", onKey);
+    controller.abort();
+    if (removalTimer) clearTimeout(removalTimer);
     host.remove();
   }
+  host.addEventListener("tab-hub-dispose", destroy, { signal: controller.signal });
   function onKey(event: KeyboardEvent) {
     if (event.key === "Escape") destroy();
   }
-  document.addEventListener("keydown", onKey);
-  cancel.addEventListener("click", destroy);
+  document.addEventListener("keydown", onKey, { signal: controller.signal });
+  cancel.addEventListener("click", destroy, { signal: controller.signal });
   surface.addEventListener("pointerdown", event => {
     if (event.button !== 0) return;
     start = { x: event.clientX, y: event.clientY };
     surface.setPointerCapture(event.pointerId);
     selection.style.display = "block";
-  });
+  }, { signal: controller.signal });
   surface.addEventListener("pointermove", event => {
     if (!start) return;
     const left = Math.min(start.x, event.clientX);
@@ -59,7 +67,7 @@ export function showRegionOverlay(): void {
       width: `${Math.abs(event.clientX - start.x)}px`,
       height: `${Math.abs(event.clientY - start.y)}px`
     });
-  });
+  }, { signal: controller.signal });
   surface.addEventListener("pointerup", event => {
     if (!start) return;
     const rect: PageRectangle = {
@@ -79,15 +87,21 @@ export function showRegionOverlay(): void {
     surface.style.display = "none";
     cancel.style.display = "none";
     selection.style.display = "none";
-    hint.textContent = "Saving your region…";
-    void new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-      .then(() => chrome.runtime.sendMessage({ type: "mark-region", rect, pageUrl: location.href }))
-      .then((response: { ok: boolean; error?: string }) => {
+    hint.style.display = "none";
+    void (async () => {
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      if (!host.isConnected) return;
+      const response: { ok: boolean; error?: string } = await chrome.runtime.sendMessage({ type: "mark-region", rect, pageUrl: location.href });
+      if (!host.isConnected) return;
+      hint.style.display = "block";
       hint.textContent = response.ok ? "Region saved to Tab Hub." : `Could not save: ${response.error ?? "Unknown error"}`;
-      setTimeout(destroy, response.ok ? 1800 : 5000);
-    }).catch(error => {
+      if (response.ok) removalTimer = setTimeout(destroy, 1800);
+      else cancel.style.display = "block";
+    })().catch(error => {
+      if (!host.isConnected) return;
+      hint.style.display = "block";
       hint.textContent = `Could not save: ${String(error)}`;
-      setTimeout(destroy, 5000);
+      cancel.style.display = "block";
     });
-  });
+  }, { signal: controller.signal });
 }
