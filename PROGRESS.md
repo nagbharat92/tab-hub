@@ -99,3 +99,10 @@ Each pass records a smallest goal, test outcome, any failure and fix, and a comm
 - **Test:** `npm run typecheck` and the cumulative suite pass: 18 unit and 26 Chromium end-to-end tests, including individual/bulk/group archive, an all-archived library, partial restore, restart, archive-aware search across 600 records, failed writes, backups preserving archive states, and pre-archive backups importing as active. Rebuilt 14 light/dark synthetic screenshots and refreshed the 13-file Claude planning bundle.
 - **Failure/fix:** A browser test initially targeted the wrong archive action in an archived group; traced the blocked control, corrected the intended flow, and added **Archive remaining** for cards individually restored from a still-archived group. Routine screenshot tests encoded visually identical PNGs differently, making the curated handoff look stale; they now write to ignored test output, while `npm run screenshots` deliberately refreshes committed assets.
 - **Commit:** `feat: archive and restore saved references without deletion`.
+
+## Research follow-up — Visual recollection, not picture count
+
+- **Plan:** Compare how visual-reference apps acquire images/screenshots and what Chromium permits for whole tab groups; propose approaches without changing product code.
+- **Finding:** Automatically extracting more page images was rejected by the user because generic images do not reveal the particular fragment that mattered. Reopening a saved link for a later screenshot may show different content or a login screen. The unresolved problem is preserving the original page experience and enabling later identification of the meaningful passage or region.
+- **Status:** No new screenshot or thumbnail pipeline was approved or implemented. Sources and constraints are in `RESEARCH.md`; `DECISIONS.md` records the rejected direction and open question. This documentation-only change refreshes the Claude planning handoff.
+- **Commit:** `docs: record recollection-first visual research direction`.

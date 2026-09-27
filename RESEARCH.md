@@ -38,3 +38,16 @@ The following repositories were **studied only**. No code was adapted. If code i
 - [WXT](https://wxt.dev/) has entrypoint discovery, MV3 output and dev hot reload. [CRXJS](https://github.com/crxjs/chrome-extension-tools/tree/main/packages/vite-plugin) also supplies Vite HMR; this project needs multiple extension entrypoints and a straightforward build/test boundary more than a custom Vite setup.
 
 These are source observations and engineering choices, not claims of benchmarked competitor performance. See `DECISIONS.md` for the implementation decisions.
+
+## Follow-up: thumbnail coverage is not recollection (2026-09-26)
+
+The user rejected a proposal to fill more cards with automatically selected page images. A generic hero image, avatar or site cover can improve the gallery's image count while making it **no easier to remember the specific fragment** that justified saving a link. A later screenshot of a reopened URL can likewise depict changed content or a login screen; [mymind documents that failure](https://mymind.com/faq).
+
+Relevant precedents, studied for principles rather than code or visual assets:
+
+- [Raindrop](https://help.raindrop.io/bookmarks.md) extracts and allows editing bookmark thumbnails, but a representative image is not necessarily the reason a page was saved.
+- [Are.na's extension](https://help.are.na/docs/getting-started/browser-extension.md) lets someone save a chosen image, selected text or a screenshot of the current page, retaining the link's source. This is stronger evidence for preserving user intent than a generic cover.
+- [Linkwarden](https://github.com/linkwarden/linkwarden/blob/952ac4540657cae3a67c3ca59433899d2fda8374/apps/worker/lib/preservationScheme/handleArchivePreview.ts#L19-L77) first tries a page image, then a screenshot in a **server-side Playwright worker**; its AGPL-3.0 code is study-only and that server architecture does not fit Tab Hub's local-only scope.
+- [Chrome's captureVisibleTab API](https://developer.chrome.com/docs/extensions/reference/api/tabs#method-captureVisibleTab) captures the active tab's visible viewport, not arbitrary background group tabs. Chromium specifies a [two-captures-per-second limit](https://github.com/chromium/chromium/blob/main/chrome/common/extensions/api/tabs.json#L167-L173). Capturing original tabs sequentially would require activation, time and a visible UX; reopening them later cannot guarantee the original state.
+
+**Open design question, not an approved implementation:** How can one-action group capture preserve enough of each **original page as encountered** that the user can identify and surface the meaningful passage or region later, ideally without reopening the URL? A saved screenshot could provide context and support post-save cropping, but a whole-page picture alone still cannot infer what the user cared about. Any future proposal must be judged by successful **recall of the intended fragment**, not by the percentage of cards with pictures. Keep save-before-close reliability, local privacy and explicit failure states. No screenshot pipeline was implemented from this research.

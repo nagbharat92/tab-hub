@@ -37,6 +37,10 @@ After discussion, produce a **delta brief**, not a replacement for the original 
 
 The finished delta brief can be handed back to the implementation agent.
 
+## Important open product question
+
+The user rejected a plan to automatically fill more cards with generic page images. This **does not solve recollection of the specific passage, image, transition or region** that justified saving a link. The existing thumbnail fallback is not the finished recall experience. Exploring preservation of the original page as encountered, with a way to select the meaningful fragment later, is a research direction—not an approved feature. Evaluate suggestions by fragment recall, one-action save reliability, local privacy and honest capture failures; do not optimize for picture count alone.
+
 ## Screenshot guide
 
 - `01-empty-light-desktop.png` — first-run empty hub

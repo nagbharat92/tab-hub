@@ -15,13 +15,13 @@
     },
     {
       "path": "COMPETITIVE_CONTEXT.md",
-      "bytes": 1508,
-      "sha256": "4072e0201eba1c44347c4819565326b879c8daf2b4e2adc5145e564898422977"
+      "bytes": 2308,
+      "sha256": "5accfd35ba779e38f9308efb0f7dc9a06942a5b8e1fa0c072f34689be2d18b30"
     },
     {
       "path": "DECISIONS.md",
-      "bytes": 7826,
-      "sha256": "33f3374643b482eabf0b814a33c40937a13d2874fff7d5a814f7a983d31310a2"
+      "bytes": 8576,
+      "sha256": "bf1a5922d506848606d0b03c7717392d6557e398e5c7d1afe10130065c3f9695"
     },
     {
       "path": "HOW_IT_WORKS.md",
@@ -55,13 +55,13 @@
     },
     {
       "path": "START_HERE.md",
-      "bytes": 1816,
-      "sha256": "7aedfef45c7f7a00b5ccb1d1994fdda18496b3fcbd7284f8d6ba66b753acd833"
+      "bytes": 2445,
+      "sha256": "7dfffb063f58f62a5a3c0bbe2d292f11473e37852c55881dcb6c7677f2b33cb9"
     },
     {
       "path": "SUMMARY.md",
-      "bytes": 6082,
-      "sha256": "27095cb6c02d8c9e8c0b7739b918458959a28fc58da6715f3c339d0c14a9928d"
+      "bytes": 6349,
+      "sha256": "493041e23fbe0699bd209abdd9a703c73f515f5fb6bbc65d72f0d7e1380a14fe"
     }
   ]
 }
