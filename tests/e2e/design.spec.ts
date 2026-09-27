@@ -128,12 +128,26 @@ test("capture visual states in light and dark at desktop and narrow widths", asy
       const page = await context.newPage();
       await page.setViewportSize({ width, height: width === 1440 ? 900 : 844 });
       await page.goto(`chrome-extension://${opened.id}/hub.html?scoutTheme=${theme}`);
-      await page.getByRole("button", { name: /Archived \d+/ }).click();
+      await page.getByRole("button", { name: /Previously archived \d+/ }).click();
       await expect(page.getByRole("button", { name: "Restore collection Reference drawer" })).toBeVisible();
       await expect(page.getByTestId("reference-card").first()).toBeVisible();
       await page.screenshot({ path: resolve(destination, filename) });
       await page.close();
     }
+    const deletePage = await context.newPage();
+    await deletePage.setViewportSize({ width: 1440, height: 900 });
+    await deletePage.goto(`chrome-extension://${opened.id}/hub.html?scoutTheme=light`);
+    await deletePage.getByTestId("reference-card").first().getByRole("button", { name: /^Delete / }).click();
+    await expect(deletePage.getByRole("dialog", { name: /Permanently delete/ })).toBeVisible();
+    await deletePage.screenshot({ path: resolve(destination, "delete-confirmation-light-desktop.png") });
+    await deletePage.close();
+    const narrowDelete = await context.newPage();
+    await narrowDelete.setViewportSize({ width: 390, height: 844 });
+    await narrowDelete.goto(`chrome-extension://${opened.id}/hub.html?scoutTheme=dark`);
+    await narrowDelete.getByTestId("reference-card").first().getByRole("button", { name: /^Delete / }).click();
+    await expect(narrowDelete.getByRole("dialog", { name: /Permanently delete/ })).toBeVisible();
+    await narrowDelete.screenshot({ path: resolve(destination, "delete-confirmation-dark-narrow.png") });
+    await narrowDelete.close();
   } finally {
     await context?.close();
     await removeProfile(profile);

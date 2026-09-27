@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, ArrowUpRight, ImageOff, PencilLine } from "lucide-react";
+import { ArchiveRestore, ArrowUpRight, ImageOff, PencilLine, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -168,7 +168,7 @@ function Details({ card, fragments, provider, onClose, onDirtyChange, closeReque
   );
 }
 
-export function ReferenceCard({ card, group, fragments, provider, archived, selectionMode, selected, onToggleSelect, onArchiveAction }: {
+export function ReferenceCard({ card, group, fragments, provider, archived, selectionMode, selected, onToggleSelect, onDelete, onRestore }: {
   card: SavedCard;
   group?: SavedGroup;
   fragments?: FragmentRecord;
@@ -177,7 +177,8 @@ export function ReferenceCard({ card, group, fragments, provider, archived, sele
   selectionMode: boolean;
   selected: boolean;
   onToggleSelect: (id: string) => void;
-  onArchiveAction: (card: SavedCard, archive: boolean) => void;
+  onDelete: (card: SavedCard) => void;
+  onRestore: (card: SavedCard) => void;
 }) {
   const [iconFailed, setIconFailed] = useState(false);
   const [open, setOpen] = useState(false);
@@ -233,10 +234,10 @@ export function ReferenceCard({ card, group, fragments, provider, archived, sele
             </Badge>
             <div className="card-actions">
               <DialogTrigger asChild><Button variant="ghost" size="sm" aria-label={`Edit ${card.title}`}><PencilLine size={15} /> Details</Button></DialogTrigger>
-              <Button variant="ghost" size="icon" title={archived ? "Restore reference" : "Archive reference"}
-                aria-label={`${archived ? "Restore" : "Archive"} ${card.title}`} onClick={() => onArchiveAction(card, !archived)}>
-                {archived ? <ArchiveRestore size={17} /> : <Archive size={17} />}
-              </Button>
+              {archived && <Button variant="ghost" size="icon" title="Restore reference" aria-label={`Restore ${card.title}`}
+                onClick={() => onRestore(card)}><ArchiveRestore size={17} /></Button>}
+              <Button variant="ghost" size="icon" title="Delete permanently" aria-label={`Delete ${card.title}`}
+                onClick={() => onDelete(card)}><Trash2 size={17} /></Button>
               <Button variant="ghost" size="icon" aria-label={`Open ${card.title}`} title="Open source" onClick={() => chrome.tabs.create({ url: card.url })}>
                 <ArrowUpRight size={17} />
               </Button>

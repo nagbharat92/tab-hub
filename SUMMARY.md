@@ -1,6 +1,6 @@
 # Tab Hub: delivery summary
 
-Tab Hub 0.2.1 is a locally stored Manifest V3 Chromium extension. WXT bundles a React/TypeScript/Tailwind/shadcn/ui popup, background worker and light/dark hub with no server, account, remote code or CDN.
+Tab Hub 0.3.0 is a locally stored Manifest V3 Chromium extension. WXT bundles a React/TypeScript/Tailwind/shadcn/ui popup, background worker and light/dark hub with no server, account, remote code or CDN.
 
 ## Install and use
 
@@ -10,14 +10,14 @@ Tab Hub 0.2.1 is a locally stored Manifest V3 Chromium extension. WXT bundles a 
 4. Select text and use the **Save selected passage** page context menu, or choose **Mark a visible region** and drag over the page. The popup offers both marking actions too. Marking an unsaved page adds a card but does not close the tab.
 5. Search across titles, sites, notes and saved passage text. Open a card's **Details** to see every marked piece, edit a note or correct the model's tentative guess. Use **Export**/**Import** for complete local backups.
 6. Use **How this works** in the hub header for the complete plain-language guide rendered from [`HOW_IT_WORKS.md`](HOW_IT_WORKS.md); **Copy formatted text** writes semantic HTML and a plain-text alternative without reading the clipboard.
-7. Use a card's **Archive** action, **Select references** for a batch, or **Archive collection** for a whole group. The **Archived** view has individual/bulk/collection restore actions; nothing expires or is deleted.
+7. Use a card's **Delete** action, **Select references** for a batch, or **Delete collection** for a whole group. A confirmation is required before permanently removing Tab Hub's local links and media. Existing older archived items remain in **Previously archived** until explicitly restored or deleted; their matching URLs no longer silently absorb new region marks.
 
 ## What is built
 
 - Native tab-group preservation: name, colour, group membership, saved time and original tab order. Single tabs are collected in an individual-tab view; no automatic clustering or deletion.
 - Visual cards prefer the newest marked region/passage crop, then an active-tab viewport screenshot if available, otherwise a locally cached page preview, then a designed text fallback. The hub never embeds remote images; page-owned previews are fetched without cookies/referrer, with size, timeout and concurrency limits.
 - Group/card/note/guess metadata lives in `chrome.storage.local`; fragment lists and image blobs live in extension IndexedDB. `unlimitedStorage` is requested. A `.tabhub` ZIP contains all of these and imports without overwriting conflicting data.
-- Archive state lives in separate local sidecars, leaving saved cards and media untouched. Complete backups include it; older backups still import with all items active. Archive search is explicitly scoped to the Archived view.
+- Explicit deletion removes local card/group metadata, notes, guesses, fragments and image blobs, with a persistent deletion intent for retry on partial failure. Concurrent backup, note and legacy-restore operations are serialized with deletion. A backup made *before* a delete is not changed; one made *afterward* excludes deleted content. Legacy archive sidecars remain readable for pre-0.3.0 data and backups, but no new archive action exists.
 - The replaceable `GuessProvider` has a working no-op implementation and a Chrome on-device `LanguageModel` implementation. It runs only when the model is already available, uses an extension page rather than the MV3 worker, and never sends browsing content to an AI service.
 - WXT development mode (`npm run dev`) provides extension rebuild/hot reload. `npm run typecheck` and `npm test` cover types, unit behavior and persistent-profile Playwright Chromium end-to-end behavior.
 
@@ -28,14 +28,14 @@ Tab Hub 0.2.1 is a locally stored Manifest V3 Chromium extension. WXT bundles a 
 | Loads unpacked without application errors | `tests/e2e/extension.spec.ts` |
 | One action saves at least 30 varied real pages; all appear, then originals close | `tests/e2e/real-urls.spec.ts`: 30/30 external pages settled in final run; 30 saved, displayed, closed only after verification |
 | Failures do not close tabs; no data lost on restart | `tests/e2e/capture.spec.ts` tests write failure, changed navigation, single/group and restart; real-URL test also restarts |
-| Visuals and intentional no-image states | `tests/e2e/hub.spec.ts`, including broken images and four-request limit; fourteen light/dark, desktop/narrow, empty/ten/420/archive screenshots in `screenshots/` |
+| Visuals and intentional no-image states | `tests/e2e/hub.spec.ts`, including broken images and four-request limit; 16 synthetic light/dark, desktop/narrow, empty/ten/420, deletion-confirmation and legacy-archive screenshots in `screenshots/` |
 | Selected passage or region appears on its card | `tests/e2e/fragments.spec.ts` checks multiple marks, a stored crop and an unsaved-page mark |
 | Notes and optional editable guess | `tests/e2e/notes-ai.spec.ts`: note survives restart; model-absent and mocked available on-device paths; corrected guess survives reload |
 | Search and several-hundred-item usability | `tests/unit/search.test.ts` covers all fields; `tests/e2e/scale.spec.ts` checks 600 records, incremental rendering and responsive search |
 | User-controlled recovery | `tests/e2e/backup.spec.ts` exports/imports metadata, note, guess, fragment and image in a second browser profile and rejects conflicts |
-| Reversible archive for card, bulk selection and group | `tests/e2e/archive.spec.ts` checks individual/bulk/collection flows, partial restore, restart, backup preservation and failure safety; `tests/unit/archive.test.ts` checks visibility and storage invariants |
+| Confirmed permanent deletion and safe upgrade | `tests/e2e/delete*.spec.ts` checks card/bulk/group removal, media cleanup, archived-region routing, concurrent capture/export/edit/restore and failure/restart recovery; `tests/e2e/legacy-archive.spec.ts` checks preserved archived references and older backup import |
 
-The final suite passes **18 unit tests and 35 Chromium end-to-end tests**, including region-capture regression cases for stale overlays, popup focus, retries and in-flight tab changes. Screenshots use synthetic data; the real-URL run uses public pages. The on-device model's actual presence on your own Chrome installation has not been asserted.
+The cumulative suite passes **18 unit tests and 48 Chromium end-to-end tests**, including confirmed deletion, concurrency and restart recovery, capture, backup, region-marking, 30 real public pages and a 600-card library. Screenshots use synthetic data. The on-device model's actual presence on your own Chrome installation has not been asserted.
 
 ## Decisions, limits and next work
 

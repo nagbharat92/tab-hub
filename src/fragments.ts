@@ -1,5 +1,6 @@
-import { makeRecords, loadLibrary, persistAndConfirm } from "./library";
-import { appendFragment, putImage, type Fragment } from "./media";
+import { makeRecords, loadLibrary, persistAndConfirm, cardKey, pendingDeletionKey, withDeletionLock } from "./library";
+import { isCardArchived } from "./archive";
+import { appendFragment, appendFragmentWithImage, putImage, withCardMediaLock, type Fragment } from "./media";
 import type { PageRectangle } from "./region-overlay";
 import type { SavedCard } from "./types";
 
@@ -30,20 +31,29 @@ function readSelection(): SelectionInfo {
 async function matchingCard(tab: chrome.tabs.Tab): Promise<{ card: SavedCard; createdCard: boolean }> {
   const url = tab.url;
   if (!url) throw new Error("This tab has no URL; the fragment was not saved.");
-  const { cards } = await loadLibrary();
-  const exact = cards.find(card => card.url === url);
+  const { cards, archives } = await loadLibrary();
+  const visible = cards.filter(card => !isCardArchived(card, archives));
+  const exact = visible.find(card => card.url === url);
   const withoutHash = (value: string) => {
     const parsed = new URL(value);
     parsed.hash = "";
     return parsed.href;
   };
-  const previous = exact ?? cards.find(card => withoutHash(card.url) === withoutHash(url));
+  const previous = exact ?? visible.find(card => withoutHash(card.url) === withoutHash(url));
   if (previous) return { card: previous, createdCard: false };
   const { group, cards: newCards } = makeRecords([tab], { name: "Individual tabs", color: "grey", kind: "single" });
   const card = newCards[0];
   if (!card) throw new Error("Could not create a card for this fragment.");
   await persistAndConfirm(group, newCards);
   return { card, createdCard: true };
+}
+
+async function ensureMarkTarget(cardId: string): Promise<void> {
+  const records = await chrome.storage.local.get([cardKey(cardId), pendingDeletionKey]);
+  const deleting = (records[pendingDeletionKey] as { cardIds?: string[] } | undefined)?.cardIds;
+  if (!records[cardKey(cardId)] || deleting?.includes(cardId)) {
+    throw new Error("This reference was deleted while you were marking it. Mark the page again to create a new reference.");
+  }
 }
 
 async function cropVisible(tabId: number, rectangle: PageRectangle): Promise<Blob> {
@@ -101,7 +111,11 @@ async function signalChange() {
   }
 }
 
-export async function markText(tabId: number, selectedText?: string): Promise<MarkResult> {
+export function markText(tabId: number, selectedText?: string): Promise<MarkResult> {
+  return withDeletionLock(() => markTextUnderLock(tabId, selectedText));
+}
+
+async function markTextUnderLock(tabId: number, selectedText?: string): Promise<MarkResult> {
   const tab = await chrome.tabs.get(tabId);
   if (!tab.url || (tab.pendingUrl && tab.pendingUrl !== tab.url)) throw new Error("The page is navigating; select the passage again.");
   let selection: SelectionInfo = { text: "" };
@@ -116,19 +130,26 @@ export async function markText(tabId: number, selectedText?: string): Promise<Ma
   if (!text) throw new Error("Select a passage first. No fragment was saved.");
   const { card, createdCard } = await matchingCard(tab);
   const fragment: Fragment = { id: crypto.randomUUID(), cardId: card.id, kind: "text", text, savedAt: Date.now() };
-  await appendFragment(fragment);
-  if (selection.rect && selection.text === text) {
-    try {
-      await putImage(fragment.id, await cropVisible(tabId, selection.rect));
-    } catch (error) {
-      console.info("Tab Hub: passage text saved without an image crop.", error);
+  await withCardMediaLock(card.id, async () => {
+    await ensureMarkTarget(card.id);
+    await appendFragment(fragment);
+    if (selection.rect && selection.text === text) {
+      try {
+        await putImage(fragment.id, await cropVisible(tabId, selection.rect));
+      } catch (error) {
+        console.info("Tab Hub: passage text saved without an image crop.", error);
+      }
     }
-  }
+  });
   await signalChange();
   return { cardId: card.id, fragmentId: fragment.id, createdCard, kind: "text" };
 }
 
-export async function markRegion(tabId: number, pageUrl: string, rect: PageRectangle): Promise<MarkResult> {
+export function markRegion(tabId: number, pageUrl: string, rect: PageRectangle): Promise<MarkResult> {
+  return withDeletionLock(() => markRegionUnderLock(tabId, pageUrl, rect));
+}
+
+async function markRegionUnderLock(tabId: number, pageUrl: string, rect: PageRectangle): Promise<MarkResult> {
   const tab = await chrome.tabs.get(tabId);
   if (!tab.url || tab.url !== pageUrl || (tab.pendingUrl && tab.pendingUrl !== pageUrl)) {
     throw new Error("The page changed before the crop was saved; please select it again.");
@@ -136,8 +157,10 @@ export async function markRegion(tabId: number, pageUrl: string, rect: PageRecta
   const crop = await cropVisible(tabId, rect);
   const { card, createdCard } = await matchingCard(tab);
   const fragment: Fragment = { id: crypto.randomUUID(), cardId: card.id, kind: "region", text: "", savedAt: Date.now() };
-  await putImage(fragment.id, crop);
-  await appendFragment(fragment);
+  await withCardMediaLock(card.id, async () => {
+    await ensureMarkTarget(card.id);
+    await appendFragmentWithImage(fragment, crop);
+  });
   await signalChange();
   return { cardId: card.id, fragmentId: fragment.id, createdCard, kind: "region" };
 }

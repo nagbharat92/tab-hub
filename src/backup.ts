@@ -1,5 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { archivedCardKey, archivedGroupKey, cardKey, groupKey, guessKey, matchesStored, noteKey, persistRecordsAndConfirm } from "./library";
+import { archivedCardKey, archivedGroupKey, cardKey, groupKey, guessKey, matchesStored, noteKey, pendingDeletionKey, persistRecordsAndConfirm, withDeletionLock } from "./library";
 import { addImportedMedia, getFragments, getImages, type FragmentRecord } from "./media";
 import type { ArchiveStates, CardArchiveState, GroupArchiveState, SavedCard, SavedGroup } from "./types";
 
@@ -128,7 +128,12 @@ export function validateBackupManifest(value: unknown): BackupManifest {
 }
 
 export async function exportBackup(): Promise<{ file: Blob; filename: string; result: BackupResult }> {
+  return await withDeletionLock(snapshotBackup);
+}
+
+async function snapshotBackup(): Promise<{ file: Blob; filename: string; result: BackupResult }> {
   const records = await chrome.storage.local.get(null);
+  if (records[pendingDeletionKey]) throw new Error("A permanent deletion is still finishing. Retry cleanup before exporting a backup.");
   const groups = Object.entries(records).filter(([key]) => key.startsWith("group:")).map(([, value]) => value as SavedGroup);
   const cards = Object.entries(records).filter(([key]) => key.startsWith("card:")).map(([, value]) => value as SavedCard);
   const notes = Object.fromEntries(Object.entries(records).filter(([key]) => key.startsWith("note:"))) as Record<string, string>;
@@ -169,6 +174,26 @@ async function sameImage(a: Blob, b: Blob): Promise<boolean> {
 }
 
 export async function importBackup(file: File): Promise<BackupResult> {
+  return await withDeletionLock(() => restoreBackup(file));
+}
+
+function mergeDeletedGroupMembers(current: SavedGroup, incoming: SavedGroup): SavedGroup | undefined {
+  const { cardIds: currentIds, ...currentMetadata } = current;
+  const { cardIds: incomingIds, ...incomingMetadata } = incoming;
+  if (!matchesStored(currentMetadata, incomingMetadata)) return undefined;
+  let offset = 0;
+  for (const id of currentIds) {
+    const next = incomingIds.indexOf(id, offset);
+    if (next < 0) return undefined;
+    offset = next + 1;
+  }
+  return incoming;
+}
+
+async function restoreBackup(file: File): Promise<BackupResult> {
+  if ((await chrome.storage.local.get(pendingDeletionKey))[pendingDeletionKey]) {
+    throw new Error("A permanent deletion is still finishing. Retry cleanup before importing a backup.");
+  }
   if (file.size > MAX_BACKUP_BYTES) throw new Error("This backup exceeds the 500 MB import limit.");
   let expandedBytes = 0;
   const archive = unzipSync(new Uint8Array(await file.arrayBuffer()), {
@@ -200,7 +225,11 @@ export async function importBackup(file: File): Promise<BackupResult> {
   const present = await chrome.storage.local.get(Object.keys(records));
   const additions = Object.fromEntries(Object.entries(records).filter(([key, value]) => {
     if (present[key] === undefined) return true;
-    if (!matchesStored(present[key], value)) throw new Error(`Existing local data conflicts with ${key}; nothing was overwritten.`);
+    if (!matchesStored(present[key], value)) {
+      if (key.startsWith("group:") &&
+          mergeDeletedGroupMembers(present[key] as SavedGroup, value as SavedGroup)) return true;
+      throw new Error(`Existing local data conflicts with ${key}; nothing was overwritten.`);
+    }
     return false;
   }));
   const existingImages = new Map((await getImages()).map(item => [item.id, item.image]));

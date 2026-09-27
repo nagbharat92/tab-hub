@@ -1,4 +1,5 @@
-import { getImage, putImage } from "./media";
+import { getImage, putImage, withCardMediaLock } from "./media";
+import { cardKey, pendingDeletionKey } from "./library";
 
 const MAX_IMAGE_BYTES = 2_500_000;
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"]);
@@ -65,7 +66,11 @@ async function fetchPreview(cardId: string, address: URL): Promise<Blob> {
       offset += part.byteLength;
     }
     const image = new Blob([bytes.buffer], { type });
-    await putImage(cardId, image);
+    await withCardMediaLock(cardId, async () => {
+      const records = await chrome.storage.local.get([cardKey(cardId), pendingDeletionKey]);
+      const deleting = (records[pendingDeletionKey] as { cardIds?: string[] } | undefined)?.cardIds;
+      if (records[cardKey(cardId)] && !deleting?.includes(cardId)) await putImage(cardId, image);
+    });
     return image;
   } finally {
     clearTimeout(timeout);

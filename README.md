@@ -12,7 +12,7 @@ Tab Hub is a private, local-first Chromium extension for turning tab groups and 
 - Shows visual cards with page previews, screenshots, marked passages or cropped regions.
 - Searches titles, websites, URLs, notes and saved passage text.
 - Keeps notes and optional Chrome on-device AI guesses editable.
-- Archives one card, several selected cards or a whole collection without deleting anything; restores them from an Archived view.
+- Permanently deletes one card, selected cards or a collection only after explicit confirmation. Older archived records remain available to restore or delete.
 - Stores everything locally, with complete user-controlled export and import.
 
 ## Install locally
@@ -44,7 +44,7 @@ WXT provides the Manifest V3 build and development reload flow. The automated su
 
 ## Claude planning handoff
 
-The tracked [`claude-handoff/`](claude-handoff/) folder is the small, uploadable planning bundle. It contains the product brief, current state, user guide, decisions, limits, a compact competitive summary and five synthetic UI screenshots—including the archive—without source code or private saved-tab data.
+The tracked [`claude-handoff/`](claude-handoff/) folder is the small, uploadable planning bundle. It contains the product brief, current state, user guide, decisions, limits, a compact competitive summary and privacy-safe synthetic UI screenshots—including the deletion confirmation—without source code or private saved-tab data.
 
 After every substantial completed task:
 
@@ -79,7 +79,7 @@ The left side of the hub lists your saved browser groups. Each collection keeps 
 - **All references** shows everything.
 - Selecting a collection shows only that group's cards.
 - **Individual tabs** holds pages that were saved outside a group.
-- **Archived** holds references you deliberately moved out of the main view; its count shows how many are there.
+- **Previously archived** appears only if you archived references in an earlier version. You can restore or permanently delete them; the upgrade does not remove them.
 
 On a narrow window, collections become a horizontal row you can scroll.
 
@@ -95,25 +95,17 @@ Each card represents one saved tab. A card can show:
 
 Click the card image—or **Details**—to see and edit everything attached to that reference. Use the arrow button to open the original page.
 
-## Archive without losing anything
+## Permanently delete a saved reference
 
-Archiving hides a saved reference from your main library. It **does not delete** the link, note, guess, marked pieces or images. Nothing expires after 90 days—or at any other time.
+Choose **Delete** on a card, or select several cards and choose **Delete selected permanently**. To remove a whole saved browser group, choose that collection and click **Delete collection**. **Select all matches** includes cards beyond the first screen.
 
-### One card
+Tab Hub asks for confirmation before deleting. This **cannot be undone inside Tab Hub**: its copy of each link, note, guess, marked piece and local image is permanently removed. A collection deletion also includes any of its cards that were previously archived. It does **not** delete the source website, your browser history or a `.tabhub` backup file you downloaded earlier.
 
-Choose the **Archive** icon on a card, then confirm. To bring it back, open **Archived**, choose the **Restore** icon on its card and confirm.
+### References archived in an earlier version
 
-### Several cards
+Older archived references are **not** automatically deleted on upgrade. Choose **Previously archived** to find them. You can **Restore** a card or collection, delete one, select several to delete, or delete a collection including its hidden cards. When all old archived references are gone, this section disappears.
 
-Choose **Select references**, check the cards you want, then choose **Archive selected** or, in Archived, **Restore selected**. **Select all matches** selects every card matching the current search—even cards farther down the page. Confirm before the change takes effect.
-
-### An entire collection
-
-Choose a saved browser group in the collection list and click **Archive collection**. It moves that group's cards out of the main view in one action. In Archived, use **Restore collection** to bring the group back.
-
-If you had archived a card individually before archiving its collection, restoring the collection **does not** restore that card. You can restore it separately. If you restore one card while its collection is still archived, it reappears in the main view; **Archive remaining** can hide that card again without changing the rest.
-
-You can still open a source link and read or edit a card in Archived. An archived page you mark again receives its new fragment on the existing archived card; restore it to see that card in the main view.
+If deletion fails partway through, Tab Hub keeps the confirmed deletion pending and provides **Retry deletion cleanup**. Do not import or export a backup until that cleanup finishes.
 
 ## Save a tab group
 
@@ -145,7 +137,7 @@ Saving a fragment does not close the page.
 
 You can also select text and choose **Mark selected text** in the extension popup.
 
-The passage appears on the matching card and becomes searchable. If the page was not already saved, Tab Hub creates an individual card for it.
+The passage appears on the matching **visible** card and becomes searchable. If the page was never saved—or only a previously archived copy exists—Tab Hub creates a new individual card in the main library rather than hiding your new fragment.
 
 ### Mark a visual region
 
@@ -174,7 +166,7 @@ Use **Search everything** above the cards. Search looks through:
 - your notes
 - saved passage text
 
-Search works across the current view: all active references, one selected collection, or Archived. To find something you moved out of sight, choose **Archived** first and search there.
+Search works across the current view: all visible references, one selected collection, or **Previously archived** if that legacy section exists.
 
 ## How card visuals are chosen
 
@@ -191,15 +183,14 @@ A missing or broken image never prevents the link from being saved.
 
 Everything lives in this browser profile, so use **Export** occasionally.
 
-The downloaded `.tabhub` file includes links, groups, archive state, notes, guesses, marked passages and stored images. Keep it somewhere private: it contains part of your browsing history and is not encrypted.
+The downloaded `.tabhub` file includes current links, groups, notes, guesses, marked passages, stored images and any remaining legacy archive state. Keep it somewhere private: it contains part of your browsing history and is not encrypted.
 
-Use **Import** to restore the file, including what you archived. Tab Hub verifies identical existing records and refuses to overwrite a conflicting local edit. Backups made before archiving was introduced still import normally; their cards start in the main library.
+Use **Import** to restore it. Tab Hub verifies identical existing records and refuses to overwrite a conflicting local edit. Backups made before archive existed still import normally. A backup saved before you permanently deleted a card still contains that earlier copy; importing it is an explicit way to recover it.
 
 ## Privacy and limits
 
 - There is no account, server or cross-device sync.
-- Tab Hub does not automatically delete saved references.
-- Archiving never deletes references or images, and there is no timer that removes them.
+- Nothing is deleted automatically or after a timer; only your confirmed **Delete permanently** action removes local data.
 - Page data is not sent to a hosted AI service.
 - The copy button writes this guide only when you click it; Tab Hub does not read your clipboard.
 - The optional guess uses Chrome's built-in on-device model only when it is already available.

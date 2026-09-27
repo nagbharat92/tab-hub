@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isCardArchived, setCardsArchived, setGroupArchived } from "../../src/archive";
+import { isCardArchived, restoreArchivedCards, restoreArchivedGroup } from "../../src/archive";
 import { archivedCardKey, archivedGroupKey, cardKey, groupKey } from "../../src/library";
 import type { ArchiveStates, SavedCard, SavedGroup } from "../../src/types";
 
@@ -18,6 +18,7 @@ function fixtureStorage(overrides: Record<string, unknown> = {}) {
     set: vi.fn(async (items: Record<string, unknown>) => { Object.assign(data, items); })
   };
   vi.stubGlobal("chrome", { storage: { local: storage } });
+  vi.stubGlobal("navigator", { locks: { request: async (_name: string, _options: unknown, operation: () => Promise<unknown>) => operation() } });
   return { data, storage };
 }
 
@@ -48,28 +49,27 @@ describe("archive visibility", () => {
     expect(isCardArchived({ ...card, id: "card-2" }, states)).toBe(false);
   });
 
-  it("writes verified sidecar states without altering saved cards or groups", async () => {
-    const { data } = fixtureStorage();
-    await setCardsArchived([card.id], true);
-    expect(data[archivedCardKey(card.id)]).toMatchObject({ archivedAt: expect.any(Number) });
-    await setGroupArchived(group.id, true);
-    const firstEpoch = (data[archivedGroupKey(group.id)] as { epoch: string }).epoch;
-    await setCardsArchived([card.id], false);
-    expect(data[archivedCardKey(card.id)]).toEqual({ archivedAt: null, restoredFromEpoch: firstEpoch });
-    await setGroupArchived(group.id, false);
-    expect(data[archivedGroupKey(group.id)]).toEqual({ archivedAt: null, epoch: firstEpoch });
-    await setGroupArchived(group.id, true);
-    expect((data[archivedGroupKey(group.id)] as { epoch: string }).epoch).not.toBe(firstEpoch);
+  it("restores verified legacy sidecars without altering saved cards or groups", async () => {
+    const epoch = "old-archive";
+    const { data } = fixtureStorage({
+      [archivedCardKey(card.id)]: { archivedAt: 100 },
+      [archivedGroupKey(group.id)]: { archivedAt: 101, epoch }
+    });
+    await restoreArchivedCards([card.id]);
+    expect(data[archivedCardKey(card.id)]).toEqual({ archivedAt: null, restoredFromEpoch: epoch });
+    await restoreArchivedGroup(group.id);
+    expect(data[archivedGroupKey(group.id)]).toEqual({ archivedAt: null, epoch });
     expect(data[cardKey(card.id)]).toEqual(card);
     expect(data[groupKey(group.id)]).toEqual(group);
   });
 
   it("rejects a missing card or failed write instead of reporting success", async () => {
-    const { data, storage } = fixtureStorage();
-    await expect(setCardsArchived(["missing"], true)).rejects.toThrow(/no longer saved/);
+    const { data, storage } = fixtureStorage({ [archivedCardKey(card.id)]: { archivedAt: 100 } });
+    await expect(restoreArchivedCards(["missing"])).rejects.toThrow(/no longer saved/);
     expect(data[archivedCardKey("missing")]).toBeUndefined();
     storage.set.mockImplementationOnce(async () => { throw new Error("Disk is full"); });
-    await expect(setCardsArchived([card.id], true)).rejects.toThrow(/Disk is full/);
-    expect(data[archivedCardKey(card.id)]).toBeUndefined();
+    await expect(restoreArchivedCards([card.id])).rejects.toThrow(/Disk is full/);
+    expect(data[archivedCardKey(card.id)]).toEqual({ archivedAt: 100 });
+    await expect(restoreArchivedGroup(group.id)).rejects.toThrow(/already in your library/);
   });
 });

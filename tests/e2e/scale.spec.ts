@@ -67,7 +67,7 @@ test("six hundred local references stay searchable and incrementally render", as
       await chrome.storage.local.set(archives);
     });
     await expect(page.getByRole("button", { name: "All references 350" })).toBeVisible();
-    await page.getByRole("button", { name: "Archived 250" }).click();
+    await page.getByRole("button", { name: "Previously archived 250" }).click();
     await expect(page.getByTestId("reference-card").first()).toBeVisible();
     await page.getByRole("textbox", { name: "Search references" }).fill("needle");
     await expect(page.getByTestId("reference-card")).toHaveCount(3);

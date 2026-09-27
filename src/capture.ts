@@ -1,5 +1,6 @@
 import { makeRecords, persistAndConfirm } from "./library";
-import { putImage } from "./media";
+import { putImage, withCardMediaLock } from "./media";
+import { cardKey, pendingDeletionKey, withDeletionLock } from "./library";
 import type { CaptureResult, SavedCard } from "./types";
 
 interface PagePreview {
@@ -61,14 +62,27 @@ async function captureActiveScreenshot(tabs: chrome.tabs.Tab[], cards: SavedCard
     console.warn("Tab Hub: screenshot skipped because capture records did not match.");
     return;
   }
+  let leftTab = false;
+  const activated = (info: { windowId: number; tabId: number }) => {
+    if (info.windowId === tab.windowId && info.tabId !== tab.id) leftTab = true;
+  };
+  chrome.tabs.onActivated.addListener(activated);
   try {
     const current = await chrome.tabs.get(tab.id);
     if (!current.active || current.url !== card.url) return;
     const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 72 });
+    const after = await chrome.tabs.get(tab.id);
+    if (leftTab || !after.active || after.url !== card.url || after.pendingUrl) return;
     const image = await (await fetch(dataUrl)).blob();
-    await putImage(card.id, image);
+    await withCardMediaLock(card.id, async () => {
+      const records = await chrome.storage.local.get([cardKey(card.id), pendingDeletionKey]);
+      const deleting = (records[pendingDeletionKey] as { cardIds?: string[] } | undefined)?.cardIds;
+      if (records[cardKey(card.id)] && !deleting?.includes(card.id)) await putImage(card.id, image);
+    });
   } catch (error) {
     console.info("Tab Hub: visible screenshot unavailable; the card retains its fallback.", error);
+  } finally {
+    chrome.tabs.onActivated.removeListener(activated);
   }
 }
 
@@ -77,7 +91,7 @@ const pending = new Map<string, Promise<CaptureResult>>();
 export function captureTabs(tabs: chrome.tabs.Tab[], group: { name: string; color: chrome.tabGroups.ColorEnum | "grey"; kind: "group" | "single" }): Promise<CaptureResult> {
   const identity = tabs.map(tab => tab.id).join(",");
   if (pending.has(identity)) return pending.get(identity)!;
-  const operation = saveThenClose(tabs, group).finally(() => pending.delete(identity));
+  const operation = withDeletionLock(() => saveThenClose(tabs, group)).finally(() => pending.delete(identity));
   pending.set(identity, operation);
   return operation;
 }

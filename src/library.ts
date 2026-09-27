@@ -6,6 +6,11 @@ export const noteKey = (id: string) => `note:${id}`;
 export const guessKey = (id: string) => `guess:${id}`;
 export const archivedCardKey = (id: string) => `archive:card:${id}`;
 export const archivedGroupKey = (id: string) => `archive:group:${id}`;
+export const pendingDeletionKey = "deletion:pending";
+
+export async function withDeletionLock<T>(operation: () => Promise<T>): Promise<T> {
+  return await navigator.locks.request("tab-hub-permanent-delete", { mode: "exclusive" }, async () => await operation());
+}
 
 export function siteFromUrl(url: string): string {
   const parsed = new URL(url);
@@ -80,8 +85,9 @@ export async function persistAndConfirm(group: SavedGroup, cards: SavedCard[], s
 
 export async function loadLibrary(): Promise<Library> {
   const records = await chrome.storage.local.get(null);
+  const deleting = new Set((records[pendingDeletionKey] as { cardIds?: string[] } | undefined)?.cardIds ?? []);
   const groups = Object.entries(records).filter(([key]) => key.startsWith("group:")).map(([, value]) => value as SavedGroup);
-  const cards = Object.entries(records).filter(([key]) => key.startsWith("card:")).map(([, value]) => {
+  const cards = Object.entries(records).filter(([key]) => key.startsWith("card:") && !deleting.has(key.slice("card:".length))).map(([, value]) => {
     const original = value as SavedCard;
     const note = records[noteKey(original.id)] as string | undefined;
     const guess = records[guessKey(original.id)] as { value: string; source: "model" | "user" } | undefined;
@@ -105,22 +111,28 @@ export async function loadLibrary(): Promise<Library> {
 }
 
 async function ensureCardExists(id: string): Promise<void> {
-  if (!(await chrome.storage.local.get(cardKey(id)))[cardKey(id)]) throw new Error("This card is no longer in local storage.");
+  const records = await chrome.storage.local.get([cardKey(id), pendingDeletionKey]);
+  const deleting = (records[pendingDeletionKey] as { cardIds?: string[] } | undefined)?.cardIds;
+  if (!records[cardKey(id)] || deleting?.includes(id)) throw new Error("This card is no longer available for editing.");
 }
 
 export async function updateNote(id: string, note: string): Promise<void> {
-  await ensureCardExists(id);
-  const key = noteKey(id);
-  await chrome.storage.local.set({ [key]: note });
-  if ((await chrome.storage.local.get(key))[key] !== note) throw new Error("The note could not be verified.");
+  await withDeletionLock(async () => {
+    await ensureCardExists(id);
+    const key = noteKey(id);
+    await chrome.storage.local.set({ [key]: note });
+    if ((await chrome.storage.local.get(key))[key] !== note) throw new Error("The note could not be verified.");
+  });
 }
 
 export async function updateGuess(id: string, guess: string, source: "model" | "user"): Promise<void> {
-  await ensureCardExists(id);
-  const key = guessKey(id);
-  const existing = (await chrome.storage.local.get(key))[key] as { source: "model" | "user" } | undefined;
-  if (source === "model" && existing?.source === "user") return;
-  const value = { value: guess, source };
-  await chrome.storage.local.set({ [key]: value });
-  if (!matchesStored((await chrome.storage.local.get(key))[key], value)) throw new Error("The interpretation could not be verified.");
+  await withDeletionLock(async () => {
+    await ensureCardExists(id);
+    const key = guessKey(id);
+    const existing = (await chrome.storage.local.get(key))[key] as { source: "model" | "user" } | undefined;
+    if (source === "model" && existing?.source === "user") return;
+    const value = { value: guess, source };
+    await chrome.storage.local.set({ [key]: value });
+    if (!matchesStored((await chrome.storage.local.get(key))[key], value)) throw new Error("The interpretation could not be verified.");
+  });
 }

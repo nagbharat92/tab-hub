@@ -1,12 +1,12 @@
 {
   "format": "tab-hub-claude-handoff",
   "version": 1,
-  "productVersion": "0.2.1",
+  "productVersion": "0.3.0",
   "files": [
     {
       "path": "BLOCKERS.md",
-      "bytes": 1849,
-      "sha256": "fe5cbf3828879306b9da704966748381c7dd69140537a309a452f8e22912dc76"
+      "bytes": 2075,
+      "sha256": "0c97d85b6cbba257647e30687fc6cff2e925f9769570a2ebd0b2a72eb8171fb9"
     },
     {
       "path": "BRIEF.md",
@@ -15,18 +15,18 @@
     },
     {
       "path": "COMPETITIVE_CONTEXT.md",
-      "bytes": 2308,
-      "sha256": "5accfd35ba779e38f9308efb0f7dc9a06942a5b8e1fa0c072f34689be2d18b30"
+      "bytes": 2408,
+      "sha256": "f6ce5853ac734b7810650c674b6bf7b097f67a3f274d257dab16a171aa6b63d8"
     },
     {
       "path": "DECISIONS.md",
-      "bytes": 9407,
-      "sha256": "9312b0b822b24e823e73b8f69babf67c119a5ee99958d6fc735adf952f17c1d7"
+      "bytes": 10784,
+      "sha256": "fd63a8005ac1e14aa25f5c5cf225e76b56928a3f49e5cfc718f43d87a135d772"
     },
     {
       "path": "HOW_IT_WORKS.md",
-      "bytes": 7554,
-      "sha256": "659397f1505f36837e5fa9aa7c3551d1b45562386cbdaaf71d218994fa6a3da1"
+      "bytes": 7500,
+      "sha256": "e8353d9f74eb98f59bb11a41c7694691d32c1973ca76f6281eb9a9c5b33bd8c9"
     },
     {
       "path": "screenshots/01-empty-light-desktop.png",
@@ -35,33 +35,33 @@
     },
     {
       "path": "screenshots/02-library-light-desktop.png",
-      "bytes": 276516,
-      "sha256": "5ec03a3eef3248b5ede665af5094726c0924fc699f8f8d797a7d4c644bb87b3f"
+      "bytes": 271558,
+      "sha256": "30a8136b7df3d94261ef83aabbcb0e7329e4cb9d251509a7799dc9ea6a029e7d"
     },
     {
       "path": "screenshots/03-library-dark-desktop.png",
-      "bytes": 269384,
-      "sha256": "e383ee03eb59dd461de18d85aafc19216df47a1447cb52a15cb32dbb08a45a85"
+      "bytes": 265245,
+      "sha256": "77986e7960d4bc1f1d45724568e321733804f0d89f6399deff62d398f228238a"
     },
     {
       "path": "screenshots/04-scale-dark-narrow.png",
-      "bytes": 41890,
-      "sha256": "7dcbe7a5fb653208520ebf1ba29470840319e0906a99e36265b03f83e0ba0fdd"
+      "bytes": 41434,
+      "sha256": "1483a0303887171c36e7ffe485d579c911f07cb185e94cfffb384353325fc32a"
     },
     {
-      "path": "screenshots/05-archive-light-desktop.png",
-      "bytes": 135578,
-      "sha256": "0a2284f57dccda0210ac554118de65fdbc171b1271e9f7c4adfddd09431f0363"
+      "path": "screenshots/05-permanent-delete-confirmation.png",
+      "bytes": 119426,
+      "sha256": "10728359543d5c0dd19fd2432808c03da9d4a53ff6dcc1fb72a70b5b5c3d8662"
     },
     {
       "path": "START_HERE.md",
-      "bytes": 2445,
-      "sha256": "dd97cc396481583eb26d36ac52f1f8b0f37eca797b63abd84ae0537e17cef462"
+      "bytes": 3067,
+      "sha256": "1079db08044bbf86296937b9982ca7978eaddb02636464c345f5fb03abb22a42"
     },
     {
       "path": "SUMMARY.md",
-      "bytes": 6459,
-      "sha256": "6b5ddfdc3a4083f5e9221b513a9f3a3f72592383fc033a97872a310fd9ed3caa"
+      "bytes": 6920,
+      "sha256": "2daa84562aebadc675e47eac72fc732aab30bc27e8707cc05c51cb336000f28a"
     }
   ]
 }

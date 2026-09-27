@@ -15,4 +15,4 @@ The initial research compared OneTab, Toby, Session Buddy, Workona, Tabs Outline
 
 ## Deliberate differentiation
 
-Tab Hub is not a task manager, session restorer, cloud bookmark service or automatic organizer. Its focus is closing reference tabs safely and recovering the exact visual or textual detail later. Individual cards, selected sets and whole collections can be archived out of the main view and restored without timed deletion.
+Tab Hub is not a task manager, session restorer, cloud bookmark service or automatic organizer. Its focus is closing reference tabs safely and recovering the exact visual or textual detail later. New removals permanently delete references only after confirmation. Records archived in version 0.2 remain available in a legacy "Previously archived" view until explicitly restored or deleted; they are never purged on upgrade.

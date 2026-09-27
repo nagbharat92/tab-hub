@@ -13,7 +13,7 @@ export default defineConfig({
   manifest: {
     name: "Tab Hub",
     description: "A local visual home for saved tab groups and the fragments that matter.",
-    version: "0.2.1",
+    version: "0.3.0",
     permissions: [
       "activeTab",
       "clipboardWrite",

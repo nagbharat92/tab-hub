@@ -14,6 +14,10 @@ export interface FragmentRecord {
 const DATABASE = "tab-hub-media";
 const VERSION = 1;
 
+export async function withCardMediaLock<T>(cardId: string, operation: () => Promise<T>): Promise<T> {
+  return await navigator.locks.request(`tab-hub-media:${cardId}`, { mode: "exclusive" }, async () => await operation());
+}
+
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE, VERSION);
@@ -61,16 +65,17 @@ function asRecord(value: FragmentRecord | Fragment): FragmentRecord {
   return "items" in value ? value : { cardId: value.cardId, items: [value] };
 }
 
-export async function appendFragment(fragment: Fragment): Promise<void> {
+async function writeFragment(fragment: Fragment, image?: Blob): Promise<void> {
   const database = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {
-      const transaction = database.transaction("fragments", "readwrite");
+      const transaction = database.transaction(image ? ["fragments", "images"] : ["fragments"], "readwrite");
       const store = transaction.objectStore("fragments");
       const request = store.get(fragment.cardId);
       request.onsuccess = () => {
         const previous = request.result as FragmentRecord | Fragment | undefined;
         store.put({ cardId: fragment.cardId, items: [...(previous ? asRecord(previous).items : []), fragment] } satisfies FragmentRecord);
+        if (image) transaction.objectStore("images").put(image, fragment.id);
       };
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error ?? new Error("Could not save the fragment."));
@@ -80,6 +85,9 @@ export async function appendFragment(fragment: Fragment): Promise<void> {
     database.close();
   }
 }
+
+export const appendFragment = (fragment: Fragment) => writeFragment(fragment);
+export const appendFragmentWithImage = (fragment: Fragment, image: Blob) => writeFragment(fragment, image);
 
 export const putImage = (imageId: string, image: Blob) => writeImage(imageId, image);
 export const getImage = (imageId: string) => read<Blob>("images", imageId) as Promise<Blob | undefined>;
@@ -127,6 +135,72 @@ export async function addImportedMedia(images: { id: string; image: Blob }[], fr
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error ?? new Error("Imported media could not be saved."));
       transaction.onabort = () => reject(transaction.error ?? new Error("Imported media transaction was aborted."));
+    });
+  } finally {
+    database.close();
+  }
+}
+
+export async function deleteCardMedia(cardIds: string[]): Promise<void> {
+  for (const cardId of cardIds) {
+    await withCardMediaLock(cardId, async () => {
+      const database = await openDatabase();
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const transaction = database.transaction(["images", "fragments"], "readwrite");
+          const images = transaction.objectStore("images");
+          const fragments = transaction.objectStore("fragments");
+          const request = fragments.get(cardId);
+          request.onsuccess = () => {
+            const record = request.result as FragmentRecord | Fragment | undefined;
+            for (const fragment of record ? asRecord(record).items : []) images.delete(fragment.id);
+            images.delete(cardId);
+            fragments.delete(cardId);
+          };
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error ?? new Error("Could not remove saved media."));
+          transaction.onabort = () => reject(transaction.error ?? new Error("Media deletion was aborted."));
+        });
+      } finally {
+        database.close();
+      }
+    });
+  }
+}
+
+export async function pruneOrphanMedia(): Promise<void> {
+  const records = await chrome.storage.local.get(null);
+  const savedCardIds = new Set(Object.keys(records).filter(key => key.startsWith("card:")).map(key => key.slice("card:".length)));
+  const database = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(["images", "fragments"], "readwrite");
+      const images = transaction.objectStore("images");
+      const fragments = transaction.objectStore("fragments");
+      const imageKeys = images.getAllKeys();
+      const fragmentRecords = fragments.getAll();
+      let keys: IDBValidKey[] | undefined;
+      let savedFragments: (FragmentRecord | Fragment)[] | undefined;
+      function reconcile() {
+        if (!keys || !savedFragments) return;
+        const referencedImages = new Set<string>(savedCardIds);
+        for (const raw of savedFragments) {
+          const record = asRecord(raw);
+          if (savedCardIds.has(record.cardId)) {
+            for (const fragment of record.items) referencedImages.add(fragment.id);
+          } else {
+            fragments.delete(record.cardId);
+          }
+        }
+        for (const key of keys) {
+          if (typeof key !== "string" || !referencedImages.has(key)) images.delete(key);
+        }
+      }
+      imageKeys.onsuccess = () => { keys = imageKeys.result; reconcile(); };
+      fragmentRecords.onsuccess = () => { savedFragments = fragmentRecords.result as (FragmentRecord | Fragment)[]; reconcile(); };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error("Could not reconcile saved media."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Media reconciliation was aborted."));
     });
   } finally {
     database.close();
