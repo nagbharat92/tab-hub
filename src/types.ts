@@ -27,6 +27,22 @@ export interface SavedCard {
 export interface Library {
   groups: SavedGroup[];
   cards: SavedCard[];
+  archives: ArchiveStates;
+}
+
+export interface CardArchiveState {
+  archivedAt: number | null;
+  restoredFromEpoch?: string;
+}
+
+export interface GroupArchiveState {
+  archivedAt: number | null;
+  epoch: string;
+}
+
+export interface ArchiveStates {
+  cards: Record<string, CardArchiveState>;
+  groups: Record<string, GroupArchiveState>;
 }
 
 export interface CaptureResult {

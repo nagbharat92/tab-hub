@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, ImageOff, PencilLine } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowUpRight, ImageOff, PencilLine } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -168,11 +168,16 @@ function Details({ card, fragments, provider, onClose, onDirtyChange, closeReque
   );
 }
 
-export function ReferenceCard({ card, group, fragments, provider }: {
+export function ReferenceCard({ card, group, fragments, provider, archived, selectionMode, selected, onToggleSelect, onArchiveAction }: {
   card: SavedCard;
   group?: SavedGroup;
   fragments?: FragmentRecord;
   provider: GuessProvider;
+  archived: boolean;
+  selectionMode: boolean;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
+  onArchiveAction: (card: SavedCard, archive: boolean) => void;
 }) {
   const [iconFailed, setIconFailed] = useState(false);
   const [open, setOpen] = useState(false);
@@ -183,7 +188,7 @@ export function ReferenceCard({ card, group, fragments, provider }: {
   const favicon = chrome.runtime.getURL(`/_favicon/?pageUrl=${encodeURIComponent(card.url)}&size=32`);
 
   useEffect(() => {
-    if (provider.name === "none" || card.guess || card.guessSource === "user") return;
+    if (archived || provider.name === "none" || card.guess || card.guessSource === "user") return;
     const element = cardNode.current;
     if (!element) return;
     const observer = new IntersectionObserver(entries => {
@@ -194,7 +199,7 @@ export function ReferenceCard({ card, group, fragments, provider }: {
     }, { rootMargin: "120px" });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [card, latest, provider]);
+  }, [archived, card, latest, provider]);
 
   return (
     <Dialog open={open} onOpenChange={next => {
@@ -202,6 +207,9 @@ export function ReferenceCard({ card, group, fragments, provider }: {
       else { setOpen(next); setCloseRequested(false); }
     }}>
       <article ref={cardNode} className="reference-card" data-testid="reference-card">
+        {selectionMode && <label className="card-select">
+          <input type="checkbox" checked={selected} onChange={() => onToggleSelect(card.id)} aria-label={`Select ${card.title}`} />
+        </label>}
         <DialogTrigger asChild>
           <Button variant="ghost" className="card-preview-button" aria-label={`View details for ${card.title}`}><Preview card={card} fragment={latest} /></Button>
         </DialogTrigger>
@@ -225,6 +233,10 @@ export function ReferenceCard({ card, group, fragments, provider }: {
             </Badge>
             <div className="card-actions">
               <DialogTrigger asChild><Button variant="ghost" size="sm" aria-label={`Edit ${card.title}`}><PencilLine size={15} /> Details</Button></DialogTrigger>
+              <Button variant="ghost" size="icon" title={archived ? "Restore reference" : "Archive reference"}
+                aria-label={`${archived ? "Restore" : "Archive"} ${card.title}`} onClick={() => onArchiveAction(card, !archived)}>
+                {archived ? <ArchiveRestore size={17} /> : <Archive size={17} />}
+              </Button>
               <Button variant="ghost" size="icon" aria-label={`Open ${card.title}`} title="Open source" onClick={() => chrome.tabs.create({ url: card.url })}>
                 <ArrowUpRight size={17} />
               </Button>

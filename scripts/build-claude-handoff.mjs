@@ -20,7 +20,8 @@ const screenshotFiles = [
   ["screenshots/empty-light-desktop.png", "screenshots/01-empty-light-desktop.png"],
   ["screenshots/ten-light-desktop.png", "screenshots/02-library-light-desktop.png"],
   ["screenshots/ten-dark-desktop.png", "screenshots/03-library-dark-desktop.png"],
-  ["screenshots/many-dark-narrow.png", "screenshots/04-scale-dark-narrow.png"]
+  ["screenshots/many-dark-narrow.png", "screenshots/04-scale-dark-narrow.png"],
+  ["screenshots/archive-light-desktop.png", "screenshots/05-archive-light-desktop.png"]
 ];
 
 const startHere = `# Start here: Tab Hub planning handoff
@@ -68,6 +69,7 @@ The finished delta brief can be handed back to the implementation agent.
 - \`02-library-light-desktop.png\` — populated desktop library
 - \`03-library-dark-desktop.png\` — populated dark theme
 - \`04-scale-dark-narrow.png\` — narrow layout with a several-hundred-item collection
+- \`05-archive-light-desktop.png\` — reversible archive and collection restore controls
 `;
 
 const competitiveContext = `# Competitive context
@@ -85,7 +87,7 @@ The initial research compared OneTab, Toby, Session Buddy, Workona, Tabs Outline
 
 ## Deliberate differentiation
 
-Tab Hub is not a task manager, session restorer, cloud bookmark service or automatic organizer. Its focus is closing reference tabs safely and recovering the exact visual or textual detail later.
+Tab Hub is not a task manager, session restorer, cloud bookmark service or automatic organizer. Its focus is closing reference tabs safely and recovering the exact visual or textual detail later. Individual cards, selected sets and whole collections can be archived out of the main view and restored without timed deletion.
 `;
 
 const expected = new Map();

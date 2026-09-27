@@ -1,12 +1,12 @@
 {
   "format": "tab-hub-claude-handoff",
   "version": 1,
-  "productVersion": "0.1.2",
+  "productVersion": "0.2.0",
   "files": [
     {
       "path": "BLOCKERS.md",
-      "bytes": 1812,
-      "sha256": "d34ceb783725b3ec902462aee60c2bab5e155ee648f359ff4b2259ef523b1b45"
+      "bytes": 1893,
+      "sha256": "5ebd798fd9b8cfc0586d941ba5b28c3db32eff58e2131950739bfeba85aedd59"
     },
     {
       "path": "BRIEF.md",
@@ -15,18 +15,18 @@
     },
     {
       "path": "COMPETITIVE_CONTEXT.md",
-      "bytes": 1380,
-      "sha256": "9746129ea38d493f45bcb1f0dace49eacec2b5a26bf1b5b242b858217dca4cd3"
+      "bytes": 1508,
+      "sha256": "4072e0201eba1c44347c4819565326b879c8daf2b4e2adc5145e564898422977"
     },
     {
       "path": "DECISIONS.md",
-      "bytes": 6741,
-      "sha256": "04d2d126211824be728c372b63b9cdcbf5564fa5d08e0bafa3ba17ee801edcdc"
+      "bytes": 7826,
+      "sha256": "33f3374643b482eabf0b814a33c40937a13d2874fff7d5a814f7a983d31310a2"
     },
     {
       "path": "HOW_IT_WORKS.md",
-      "bytes": 5281,
-      "sha256": "cd0d13e482af173d086051302e7dc39cf0bbf04cc7ceffec67c086baa6ccdd51"
+      "bytes": 7183,
+      "sha256": "63d1806d00ad9ef86d792e2703649b1dc43e3607c742b0d2b23a31f9a8c0792f"
     },
     {
       "path": "screenshots/01-empty-light-desktop.png",
@@ -35,28 +35,33 @@
     },
     {
       "path": "screenshots/02-library-light-desktop.png",
-      "bytes": 269159,
-      "sha256": "754d1fccf8568d3097f61845139605e535ac86396e558d8b22330bd3e318aa22"
+      "bytes": 276516,
+      "sha256": "5ec03a3eef3248b5ede665af5094726c0924fc699f8f8d797a7d4c644bb87b3f"
     },
     {
       "path": "screenshots/03-library-dark-desktop.png",
-      "bytes": 262585,
-      "sha256": "ce8dfde74c094de0e76cb1dd69ff0d63f6cde5ad1d34d94bd00ad9802130b2bd"
+      "bytes": 269384,
+      "sha256": "e383ee03eb59dd461de18d85aafc19216df47a1447cb52a15cb32dbb08a45a85"
     },
     {
       "path": "screenshots/04-scale-dark-narrow.png",
-      "bytes": 45849,
-      "sha256": "73b533346c223d5a54832ff8b152f9e21dba7c111a08f7c9f200020a14bba384"
+      "bytes": 41890,
+      "sha256": "7dcbe7a5fb653208520ebf1ba29470840319e0906a99e36265b03f83e0ba0fdd"
+    },
+    {
+      "path": "screenshots/05-archive-light-desktop.png",
+      "bytes": 135578,
+      "sha256": "0a2284f57dccda0210ac554118de65fdbc171b1271e9f7c4adfddd09431f0363"
     },
     {
       "path": "START_HERE.md",
-      "bytes": 1728,
-      "sha256": "62d55000f84bdf3ec4f00ceec887172683073299759a0d00b6234db7c2424fbf"
+      "bytes": 1816,
+      "sha256": "7aedfef45c7f7a00b5ccb1d1994fdda18496b3fcbd7284f8d6ba66b753acd833"
     },
     {
       "path": "SUMMARY.md",
-      "bytes": 5362,
-      "sha256": "137d74accc7ef20f01bdaffc270c0e1d45023d6094a9a7b4708f578dde810d3d"
+      "bytes": 6082,
+      "sha256": "27095cb6c02d8c9e8c0b7739b918458959a28fc58da6715f3c339d0c14a9928d"
     }
   ]
 }

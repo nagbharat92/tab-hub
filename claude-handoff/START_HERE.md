@@ -2,7 +2,7 @@
 
 This is a deliberately small snapshot of Tab Hub for product and design discussion. It contains **no source code**, dependencies, test traces, real saved-tab data or private backups.
 
-**Product version:** 0.1.2
+**Product version:** 0.2.0
 
 ## Suggested reading order
 
@@ -43,3 +43,4 @@ The finished delta brief can be handed back to the implementation agent.
 - `02-library-light-desktop.png` — populated desktop library
 - `03-library-dark-desktop.png` — populated dark theme
 - `04-scale-dark-narrow.png` — narrow layout with a several-hundred-item collection
+- `05-archive-light-desktop.png` — reversible archive and collection restore controls

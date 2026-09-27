@@ -1,9 +1,11 @@
-import type { Library, SavedCard, SavedGroup } from "./types";
+import type { ArchiveStates, Library, SavedCard, SavedGroup } from "./types";
 
 export const groupKey = (id: string) => `group:${id}`;
 export const cardKey = (id: string) => `card:${id}`;
 export const noteKey = (id: string) => `note:${id}`;
 export const guessKey = (id: string) => `guess:${id}`;
+export const archivedCardKey = (id: string) => `archive:card:${id}`;
+export const archivedGroupKey = (id: string) => `archive:group:${id}`;
 
 export function siteFromUrl(url: string): string {
   const parsed = new URL(url);
@@ -59,13 +61,13 @@ export function matchesStored(actual: unknown, expected: unknown): boolean {
   return JSON.stringify(normalized(actual)) === JSON.stringify(normalized(expected));
 }
 
-export async function persistRecordsAndConfirm(records: Record<string, unknown>, storage: Storage = chrome.storage.local): Promise<void> {
+export async function persistRecordsAndConfirm(records: Record<string, unknown>, storage: Storage = chrome.storage.local, action = "Save"): Promise<void> {
   if (!Object.keys(records).length) return;
   await storage.set(records);
   const saved = await storage.get(Object.keys(records));
   for (const [key, value] of Object.entries(records)) {
     if (!matchesStored(saved[key], value)) {
-      throw new Error(`Save verification failed for ${key}; no tabs were closed.`);
+      throw new Error(`${action} verification failed for ${key}; no saved references were removed.`);
     }
   }
 }
@@ -90,9 +92,15 @@ export async function loadLibrary(): Promise<Library> {
       guessSource: guess?.source ?? original.guessSource
     };
   });
+  const archives: ArchiveStates = { cards: {}, groups: {} };
+  for (const [key, value] of Object.entries(records)) {
+    if (key.startsWith("archive:card:")) archives.cards[key.slice("archive:card:".length)] = value as ArchiveStates["cards"][string];
+    if (key.startsWith("archive:group:")) archives.groups[key.slice("archive:group:".length)] = value as ArchiveStates["groups"][string];
+  }
   return {
     groups: groups.sort((a, b) => b.savedAt - a.savedAt),
-    cards: cards.sort((a, b) => b.savedAt - a.savedAt || a.order - b.order)
+    cards: cards.sort((a, b) => b.savedAt - a.savedAt || a.order - b.order),
+    archives
   };
 }
 

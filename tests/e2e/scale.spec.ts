@@ -61,6 +61,16 @@ test("six hundred local references stay searchable and incrementally render", as
     expect(Date.now() - searchStart).toBeLessThan(3_000);
     await page.getByRole("button", { name: "Clear search" }).click();
     await expect(page.getByTestId("reference-card").first()).toBeVisible();
+    await page.evaluate(async () => {
+      const archives = Object.fromEntries(Array.from({ length: 250 }, (_, index) =>
+        [`archive:card:scale-card-${index + 350}`, { archivedAt: 1_800_000_000_000 + index }]));
+      await chrome.storage.local.set(archives);
+    });
+    await expect(page.getByRole("button", { name: "All references 350" })).toBeVisible();
+    await page.getByRole("button", { name: "Archived 250" }).click();
+    await expect(page.getByTestId("reference-card").first()).toBeVisible();
+    await page.getByRole("textbox", { name: "Search references" }).fill("needle");
+    await expect(page.getByTestId("reference-card")).toHaveCount(3);
   } finally {
     await context?.close();
     await removeProfile(profile);

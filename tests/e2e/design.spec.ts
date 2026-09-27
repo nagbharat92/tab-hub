@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { launch, newProfile, removeProfile } from "./helpers";
 
-const destination = resolve(process.env.DESIGN_OUTPUT_DIR || "screenshots");
+const destination = resolve(process.env.DESIGN_OUTPUT_DIR || "test-results/design-screenshots");
 const titles = [
   "A quiet editorial layout with room to breathe",
   "The tiny movement between an idle and active state",
@@ -113,6 +113,26 @@ test("capture visual states in light and dark at desktop and narrow widths", asy
           await page.close();
         }
       }
+    }
+    const archive = await context.newPage();
+    await archive.goto(`chrome-extension://${opened.id}/hub.html?scoutTheme=light`);
+    await archive.evaluate(async () => chrome.storage.local.set({
+      "archive:group:design-group-0": { archivedAt: Date.now(), epoch: "design-archive-group" },
+      "archive:card:design-card-13": { archivedAt: Date.now() }
+    }));
+    await archive.close();
+    for (const [theme, width, filename] of [
+      ["light", 1440, "archive-light-desktop.png"],
+      ["dark", 390, "archive-dark-narrow.png"]
+    ] as const) {
+      const page = await context.newPage();
+      await page.setViewportSize({ width, height: width === 1440 ? 900 : 844 });
+      await page.goto(`chrome-extension://${opened.id}/hub.html?scoutTheme=${theme}`);
+      await page.getByRole("button", { name: /Archived \d+/ }).click();
+      await expect(page.getByRole("button", { name: "Restore collection Reference drawer" })).toBeVisible();
+      await expect(page.getByTestId("reference-card").first()).toBeVisible();
+      await page.screenshot({ path: resolve(destination, filename) });
+      await page.close();
     }
   } finally {
     await context?.close();

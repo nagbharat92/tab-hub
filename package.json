@@ -1,6 +1,6 @@
 {
   "name": "tab-hub",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "build": "wxt build",
     "handoff:claude": "node scripts/build-claude-handoff.mjs",
     "handoff:check": "node scripts/build-claude-handoff.mjs --check",
+    "screenshots": "npm run build && DESIGN_OUTPUT_DIR=screenshots playwright test tests/e2e/design.spec.ts",
     "typecheck": "wxt prepare && tsc --noEmit",
     "test:unit": "vitest run",
     "test:e2e": "npm run build && playwright test",

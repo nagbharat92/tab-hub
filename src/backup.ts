@@ -1,7 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { cardKey, groupKey, guessKey, matchesStored, noteKey, persistRecordsAndConfirm } from "./library";
+import { archivedCardKey, archivedGroupKey, cardKey, groupKey, guessKey, matchesStored, noteKey, persistRecordsAndConfirm } from "./library";
 import { addImportedMedia, getFragments, getImages, type FragmentRecord } from "./media";
-import type { SavedCard, SavedGroup } from "./types";
+import type { ArchiveStates, CardArchiveState, GroupArchiveState, SavedCard, SavedGroup } from "./types";
 
 const MAX_BACKUP_BYTES = 500_000_000;
 
@@ -20,6 +20,7 @@ interface BackupManifest {
   cards: SavedCard[];
   notes: Record<string, string>;
   guesses: Record<string, { value: string; source: "model" | "user" }>;
+  archives?: ArchiveStates;
   fragments: FragmentRecord[];
   images: ImageDescriptor[];
 }
@@ -66,6 +67,24 @@ function isImageDescriptor(value: unknown): value is ImageDescriptor {
     typeof value.size === "number" && Number.isSafeInteger(value.size) && value.size > 0;
 }
 
+function validTime(value: unknown): value is number | null {
+  return value === null || typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isCardArchive(value: unknown): value is CardArchiveState {
+  return isRecord(value) && validTime(value.archivedAt) &&
+    (value.restoredFromEpoch === undefined || typeof value.restoredFromEpoch === "string");
+}
+
+function isGroupArchive(value: unknown): value is GroupArchiveState {
+  return isRecord(value) && validTime(value.archivedAt) && typeof value.epoch === "string" && value.epoch.length > 0;
+}
+
+function isArchives(value: unknown): value is ArchiveStates {
+  return isRecord(value) && isRecord(value.cards) && Object.values(value.cards).every(isCardArchive) &&
+    isRecord(value.groups) && Object.values(value.groups).every(isGroupArchive);
+}
+
 function isBackupManifest(value: unknown): value is BackupManifest {
   return isRecord(value) && value.format === "tab-hub" && value.version === 1 &&
       typeof value.exportedAt === "string" && Array.isArray(value.groups) && value.groups.every(isGroup) &&
@@ -73,6 +92,7 @@ function isBackupManifest(value: unknown): value is BackupManifest {
       isRecord(value.notes) && Object.values(value.notes).every(note => typeof note === "string") &&
       isRecord(value.guesses) && Object.values(value.guesses).every(guess =>
         isRecord(guess) && typeof guess.value === "string" && (guess.source === "model" || guess.source === "user")) &&
+      (value.archives === undefined || isArchives(value.archives)) &&
       Array.isArray(value.fragments) && value.fragments.every(isFragmentRecord) &&
       Array.isArray(value.images) && value.images.every(isImageDescriptor);
 }
@@ -90,6 +110,14 @@ export function validateBackupManifest(value: unknown): BackupManifest {
       !unique(manifest.images.map(image => image.path))) {
     throw new Error("The backup contains duplicate identifiers.");
   }
+  if (manifest.archives) {
+    const cardIds = new Set(manifest.cards.map(card => card.id));
+    const groupIds = new Set(manifest.groups.map(group => group.id));
+    if (Object.keys(manifest.archives.cards).some(id => !cardIds.has(id)) ||
+        Object.keys(manifest.archives.groups).some(id => !groupIds.has(id))) {
+      throw new Error("The backup contains archive records without their references.");
+    }
+  }
   for (const card of manifest.cards) {
     try { new URL(card.url); } catch { throw new Error(`The backup contains an invalid link for card ${card.id}.`); }
   }
@@ -105,13 +133,18 @@ export async function exportBackup(): Promise<{ file: Blob; filename: string; re
   const cards = Object.entries(records).filter(([key]) => key.startsWith("card:")).map(([, value]) => value as SavedCard);
   const notes = Object.fromEntries(Object.entries(records).filter(([key]) => key.startsWith("note:"))) as Record<string, string>;
   const guesses = Object.fromEntries(Object.entries(records).filter(([key]) => key.startsWith("guess:"))) as BackupManifest["guesses"];
+  const archives: ArchiveStates = { cards: {}, groups: {} };
+  for (const [key, value] of Object.entries(records)) {
+    if (key.startsWith("archive:card:")) archives.cards[key.slice("archive:card:".length)] = value as CardArchiveState;
+    if (key.startsWith("archive:group:")) archives.groups[key.slice("archive:group:".length)] = value as GroupArchiveState;
+  }
   const [fragments, images] = await Promise.all([getFragments(), getImages()]);
   const descriptors: ImageDescriptor[] = images.map(({ id, image }) => ({
     id, path: `images/${encodeURIComponent(id)}.bin`, type: image.type, size: image.size
   }));
   const manifest: BackupManifest = {
     format: "tab-hub", version: 1, exportedAt: new Date().toISOString(),
-    groups, cards, notes, guesses, fragments, images: descriptors
+    groups, cards, notes, guesses, archives, fragments, images: descriptors
   };
   const entries: Record<string, Uint8Array> = { "manifest.json": strToU8(JSON.stringify(manifest)) };
   for (const [index, { image }] of images.entries()) {
@@ -162,6 +195,8 @@ export async function importBackup(file: File): Promise<BackupResult> {
     if (!key.startsWith("guess:")) throw new Error("The backup contains an invalid guess key.");
     records[key] = value;
   }
+  for (const [id, state] of Object.entries(manifest.archives?.cards ?? {})) records[archivedCardKey(id)] = state;
+  for (const [id, state] of Object.entries(manifest.archives?.groups ?? {})) records[archivedGroupKey(id)] = state;
   const present = await chrome.storage.local.get(Object.keys(records));
   const additions = Object.fromEntries(Object.entries(records).filter(([key, value]) => {
     if (present[key] === undefined) return true;

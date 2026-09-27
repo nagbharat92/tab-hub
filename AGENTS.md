@@ -11,4 +11,6 @@ After every substantial feature, design pass, release or product decision:
 3. Run `npm run handoff:check` (also included in `npm test`).
 4. Commit the regenerated `claude-handoff/` contents with the feature.
 
+Use `npm run screenshots` only when intentionally refreshing the committed synthetic UI screenshots; regular Playwright tests write screenshots into ignored `test-results/` instead.
+
 Do not edit generated files inside `claude-handoff/` directly. Never place credentials, real saved-tab data, exported `.tabhub` files or user-specific screenshots in it.
