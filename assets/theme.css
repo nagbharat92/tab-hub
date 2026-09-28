@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("./fonts/InstrumentSerif-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("./fonts/InstrumentSerif-Italic.ttf") format("truetype");
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
   --cp-bg: #f7f4ef;
@@ -36,6 +49,23 @@
   --cp-group-purple: #9075b0;
   --cp-group-cyan: #4f9da6;
   --cp-group-orange: #ca8554;
+  --page: var(--cp-bg);
+  --card: var(--cp-surface-soft);
+  --card-raised: var(--cp-surface);
+  --text-primary: var(--cp-text);
+  --text-secondary: var(--cp-text-muted);
+  --text-tertiary: var(--cp-text-soft);
+  --accent: var(--cp-accent);
+  --stroke-selected: var(--cp-accent);
+  --scrim: var(--cp-panel);
+  --shadow: var(--cp-shadow);
+  --toast-surface: var(--cp-surface);
+  --font-sans: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --size-meta: 12px;
+  --size-ui: 14px;
+  --size-title: 24px;
+  --size-passage: 28px;
 }
 html[data-theme="dark"] {
   color-scheme: dark;
@@ -71,12 +101,14 @@ html[data-theme="dark"] {
   --cp-group-purple: #b49ace;
   --cp-group-cyan: #83bec4;
   --cp-group-orange: #d9a47b;
+  --card: var(--cp-border);
+  --card-raised: var(--cp-border-strong);
 }
 
 @layer base {
-  * { @apply border-border; }
-  html { font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif; }
-  body { margin: 0; background: var(--cp-bg); color: var(--cp-text); }
+  html { font-family: var(--font-sans); }
+  body { margin: 0; background: var(--page); color: var(--text-primary); }
   button, input, textarea { font: inherit; }
-  :focus-visible { outline: 2px solid var(--cp-accent); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--stroke-selected); outline-offset: 2px; }
+  input, textarea { caret-color: var(--accent); }
 }

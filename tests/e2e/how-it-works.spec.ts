@@ -1,55 +1,27 @@
 import { test, expect, type BrowserContext } from "@playwright/test";
 import { launch, newProfile, removeProfile } from "./helpers";
 
-test("the header guide renders the bundled Markdown as an accessible dialog", async () => {
+test("the empty hub omits the removed guide and keeps restore reachable", async () => {
   const profile = await newProfile();
   let context: BrowserContext | undefined;
   try {
     const opened = await launch(profile);
     context = opened.context;
     const page = await context.newPage();
-    await page.addInitScript(() => {
-      Object.defineProperty(navigator, "clipboard", {
-        configurable: true,
-        value: {
-          write: async (items: ClipboardItem[]) => {
-            const item = items[0];
-            if (!item) throw new Error("No clipboard item was supplied.");
-            const [html, plain] = await Promise.all([
-              item.getType("text/html").then(blob => blob.text()),
-              item.getType("text/plain").then(blob => blob.text())
-            ]);
-            Object.assign(globalThis, { __tabHubClipboard: { html, plain } });
-          }
-        }
-      });
-    });
     await page.goto(`chrome-extension://${opened.id}/hub.html`);
-    await page.getByRole("button", { name: "How this works" }).click();
-    const dialog = page.getByRole("dialog", { name: "How Tab Hub works" });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByText("Tab Hub does not automatically copy every open tab group", { exact: false })).toBeVisible();
-    await expect(dialog.getByRole("heading", { name: "Save a tab group" })).toBeVisible();
-    await expect(dialog.getByRole("heading", { name: "Privacy and limits" })).toBeAttached();
-    await dialog.getByRole("button", { name: "Copy formatted text" }).click();
-    await expect(dialog.getByRole("status")).toHaveText("Copied with formatting.");
-    const clipboard = await page.evaluate(() => (globalThis as typeof globalThis & {
-      __tabHubClipboard: { html: string; plain: string };
-    }).__tabHubClipboard);
-    expect(clipboard.html).toContain("<h1>How Tab Hub works</h1>");
-    expect(clipboard.html).toContain("<h2>Save a tab group</h2>");
-    expect(clipboard.html).toContain("<ol>");
-    expect(clipboard.plain).toContain("How Tab Hub works");
-    expect(clipboard.plain).toContain("Tab Hub does not automatically copy every open tab group");
-    await page.keyboard.press("Escape");
-    await expect(dialog).not.toBeVisible();
+    await expect(page.getByText("Save a tab from the Tab Hub button in your toolbar.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "How this works" })).toHaveCount(0);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.getByRole("button", { name: "More" }).click();
+    await expect(page.getByRole("menuitem", { name: "Import" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Export" })).toBeVisible();
   } finally {
     await context?.close();
     await removeProfile(profile);
   }
 });
 
-test("the guide button remains readable at narrow width", async () => {
+test("the guide stays absent and the More menu works at narrow width", async () => {
   const profile = await newProfile();
   let context: BrowserContext | undefined;
   try {
@@ -58,18 +30,19 @@ test("the guide button remains readable at narrow width", async () => {
     const page = await context.newPage();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`chrome-extension://${opened.id}/hub.html`);
-    const guide = page.getByRole("button", { name: "How this works" });
-    await expect(guide).toBeVisible();
-    expect(await guide.evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThan(90);
-    await guide.click();
-    await expect(page.getByRole("button", { name: "Copy formatted text" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "How this works" })).toHaveCount(0);
+    const more = page.getByRole("button", { name: "More" });
+    await expect(more).toBeVisible();
+    expect(await more.evaluate(element => element.getBoundingClientRect().right)).toBeLessThanOrEqual(390);
+    await more.click();
+    await expect(page.getByRole("menuitem", { name: "Import" })).toBeVisible();
   } finally {
     await context?.close();
     await removeProfile(profile);
   }
 });
 
-test("the extension permission allows a real clipboard write after a click", async () => {
+test("no clipboard guide or copied-status UI is exposed", async () => {
   const profile = await newProfile();
   let context: BrowserContext | undefined;
   try {
@@ -77,10 +50,10 @@ test("the extension permission allows a real clipboard write after a click", asy
     context = opened.context;
     const page = await context.newPage();
     await page.goto(`chrome-extension://${opened.id}/hub.html`);
-    await page.getByRole("button", { name: "How this works" }).click();
-    const dialog = page.getByRole("dialog", { name: "How Tab Hub works" });
-    await dialog.getByRole("button", { name: "Copy formatted text" }).click();
-    await expect(dialog.getByRole("status")).toHaveText("Copied with formatting.");
+    await page.getByRole("button", { name: "More" }).click();
+    await expect(page.getByRole("button", { name: "Copy formatted text" })).toHaveCount(0);
+    await expect(page.getByRole("status")).toHaveCount(0);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
   } finally {
     await context?.close();
     await removeProfile(profile);

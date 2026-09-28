@@ -4,6 +4,14 @@ export interface Fragment {
   kind: "text" | "region";
   text: string;
   savedAt: number;
+  anchor?: RegionAnchor;
+}
+
+export interface RegionAnchor {
+  selector?: string;
+  text?: string;
+  scrollX: number;
+  scrollY: number;
 }
 
 export interface FragmentRecord {
@@ -122,6 +130,23 @@ export async function getImages(): Promise<{ id: string; image: Blob }[]> {
   }
 }
 
+export async function getImageIds(): Promise<string[]> {
+  const database = await openDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = database.transaction("images", "readonly");
+      const keys = transaction.objectStore("images").getAllKeys();
+      transaction.oncomplete = () => {
+        if (keys.result.some(key => typeof key !== "string")) reject(new Error("An image has an invalid local identifier."));
+        else resolve(keys.result as string[]);
+      };
+      transaction.onerror = () => reject(transaction.error ?? new Error("Could not read local image identifiers."));
+    });
+  } finally {
+    database.close();
+  }
+}
+
 export async function addImportedMedia(images: { id: string; image: Blob }[], fragments: FragmentRecord[]): Promise<void> {
   if (!images.length && !fragments.length) return;
   const database = await openDatabase();
@@ -135,6 +160,29 @@ export async function addImportedMedia(images: { id: string; image: Blob }[], fr
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error ?? new Error("Imported media could not be saved."));
       transaction.onabort = () => reject(transaction.error ?? new Error("Imported media transaction was aborted."));
+    });
+  } finally {
+    database.close();
+  }
+}
+
+export async function deleteFragmentMedia(cardId: string, fragmentId: string): Promise<void> {
+  const database = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(["images", "fragments"], "readwrite");
+      const fragments = transaction.objectStore("fragments");
+      const request = fragments.get(cardId);
+      request.onsuccess = () => {
+        const previous = request.result as FragmentRecord | Fragment | undefined;
+        const remaining = previous ? asRecord(previous).items.filter(item => item.id !== fragmentId) : [];
+        if (remaining.length) fragments.put({ cardId, items: remaining } satisfies FragmentRecord);
+        else fragments.delete(cardId);
+        transaction.objectStore("images").delete(fragmentId);
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error("Could not delete the marked piece."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("Deleting the marked piece was interrupted."));
     });
   } finally {
     database.close();

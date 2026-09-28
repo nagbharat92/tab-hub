@@ -1,3 +1,5 @@
+import type { RegionAnchor } from "./media";
+
 export interface PageRectangle {
   x: number;
   y: number;
@@ -5,6 +7,7 @@ export interface PageRectangle {
   height: number;
   viewportWidth: number;
   viewportHeight: number;
+  anchor?: RegionAnchor;
 }
 
 export function showRegionOverlay(): void {
@@ -19,14 +22,14 @@ export function showRegionOverlay(): void {
   const shadow = host.attachShadow({ mode: "closed" });
   shadow.innerHTML = `
     <style>
-      :host { --cp-bg: #f7f4ef; --cp-text: #242424; --cp-accent: #b11f4b; --cp-accent-soft: rgba(177,31,75,.18); --cp-border: #dedede; font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif; }
-      .surface { position: fixed; inset: 0; cursor: crosshair; background: var(--cp-accent-soft); touch-action: none; }
-      .selection { position: fixed; box-sizing: border-box; border: 2px solid var(--cp-accent); background: var(--cp-accent-soft); pointer-events: none; display: none; }
-      .hint { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: var(--cp-bg); color: var(--cp-text); border: 1px solid var(--cp-border); border-radius: 10px; padding: 12px 18px; font-size: 13px; box-shadow: 0 18px 48px var(--cp-accent-soft); white-space: nowrap; pointer-events: none; }
-      .cancel { position: fixed; top: 16px; right: 16px; border: 1px solid var(--cp-border); border-radius: 10px; background: var(--cp-bg); color: var(--cp-text); padding: 10px 14px; cursor: pointer; }
+      :host { font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif; color-scheme: light dark; }
+      .surface { position: fixed; inset: 0; cursor: crosshair; background: color-mix(in srgb, CanvasText 10%, transparent); touch-action: none; }
+      .selection { position: fixed; box-sizing: border-box; border: 2px solid Highlight; background: color-mix(in srgb, Highlight 16%, transparent); pointer-events: none; display: none; }
+      .hint { display: none; position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: Canvas; color: CanvasText; border: 1px solid GrayText; border-radius: 10px; padding: 12px 18px; font-size: 13px; white-space: nowrap; pointer-events: none; }
+      .cancel { position: fixed; top: 16px; right: 16px; border: 1px solid GrayText; border-radius: 10px; background: Canvas; color: CanvasText; padding: 10px 14px; cursor: pointer; }
     </style>
     <div class="surface"></div><div class="selection"></div>
-    <div class="hint" role="status">Drag to frame what matters · Esc to cancel</div>
+    <div class="hint" role="status"></div>
     <button class="cancel" type="button">Cancel</button>`;
   document.documentElement.append(host);
   const surface = shadow.querySelector<HTMLElement>(".surface");
@@ -82,8 +85,30 @@ export function showRegionOverlay(): void {
     if (rect.width < 20 || rect.height < 20) {
       selection.style.display = "none";
       hint.textContent = "Drag at least 20 pixels in each direction.";
+      hint.style.display = "block";
       return;
     }
+    host.style.pointerEvents = "none";
+    const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    const element = hit?.closest("p, blockquote, figure, img, h1, h2, h3, h4, article, section") ??
+      (hit === document.documentElement || hit === host ? document.body : hit) ?? document.body;
+    let selector: string | undefined;
+    if (element) {
+      if (element.id) selector = `#${CSS.escape(element.id)}`;
+      else {
+        const parts: string[] = [];
+        for (let node: Element | null = element; node && node !== document.documentElement; node = node.parentElement) {
+          const index = [...(node.parentElement?.children ?? [])].filter(child => child.tagName === node?.tagName).indexOf(node) + 1;
+          parts.unshift(`${node.localName}:nth-of-type(${index})`);
+        }
+        selector = parts.join(" > ");
+      }
+    }
+    rect.anchor = {
+      ...(selector ? { selector } : {}),
+      ...(element?.textContent?.trim() ? { text: element.textContent.trim().replace(/\s+/g, " ").slice(0, 160) } : {}),
+      scrollX: window.scrollX, scrollY: window.scrollY
+    };
     surface.style.display = "none";
     cancel.style.display = "none";
     selection.style.display = "none";
@@ -94,9 +119,11 @@ export function showRegionOverlay(): void {
       const response: { ok: boolean; error?: string } = await chrome.runtime.sendMessage({ type: "mark-region", rect, pageUrl: location.href });
       if (!host.isConnected) return;
       hint.style.display = "block";
-      hint.textContent = response.ok ? "Region saved to Tab Hub." : `Could not save: ${response.error ?? "Unknown error"}`;
-      if (response.ok) removalTimer = setTimeout(destroy, 1800);
-      else cancel.style.display = "block";
+      if (response.ok) destroy();
+      else {
+        hint.textContent = `Could not save: ${response.error ?? "Unknown error"}`;
+        cancel.style.display = "block";
+      }
     })().catch(error => {
       if (!host.isConnected) return;
       hint.style.display = "block";

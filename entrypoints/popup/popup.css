@@ -1,8 +1,13 @@
-body { width: 320px; }
-.popup { padding: 20px; }
-.popup-brand { display: flex; align-items: center; gap: 10px; }
-.popup-brand svg { color: var(--cp-accent); }
-.popup p { color: var(--cp-text-muted); font-size: 13px; margin: 12px 0 24px; }
-.popup-actions { display: grid; gap: 8px; margin-bottom: 8px; }
-.popup-feedback { padding: 12px; border-radius: 0.625rem; background: var(--cp-accent-soft); line-height: 1.5; }
-.popup-divider { height: 1px; background: var(--cp-border); margin: 8px 0; }
+body { width: 342px; background: var(--page); }
+.popup { padding: 11px; }
+.popup button { display: flex; width: 100%; min-height: 43px; align-items: center; gap: 13px;
+  padding: 9px 11px; border: 0; border-radius: 11px; background: transparent;
+  color: var(--text-primary); font-size: var(--size-ui); text-align: left; cursor: pointer; }
+.popup .group-action { font-weight: 600; }
+.popup button:hover:not(:disabled) { background: var(--card); }
+.popup button:disabled { opacity: .42; cursor: default; }
+.popup button svg { flex: none; color: var(--text-secondary); }
+.popup button span { flex: 1; }
+.popup kbd { margin-left: auto; color: var(--text-tertiary); font: normal var(--size-meta) var(--font-sans); white-space: nowrap; }
+.popup-divider { display: block; height: 1px; margin: 6px 11px; background: var(--cp-border); }
+.popup-error { margin: 10px 9px 4px; color: var(--text-secondary); font-size: var(--size-meta); line-height: 1.4; }

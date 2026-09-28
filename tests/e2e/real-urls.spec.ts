@@ -32,8 +32,8 @@ test("a group of thirty varied public websites saves every link and closes after
     const result = await hub.evaluate(id => chrome.runtime.sendMessage({ type: "capture-group", groupId: id }), groupId);
     console.log(`Capture and verified close took ${Date.now() - captureStarted}ms.`);
     expect(result, JSON.stringify(result)).toMatchObject({ ok: true, result: { saved: 30, closed: 30, skipped: 0 } });
-    await expect(hub.getByText("30 references", { exact: false }).first()).toBeVisible();
     await expect(hub.getByTestId("reference-card")).toHaveCount(30);
+    await expect(hub.getByText("30 references", { exact: false })).toHaveCount(0);
     const savedUrls = await hub.evaluate(async () => Object.entries(await chrome.storage.local.get(null))
       .filter(([key]) => key.startsWith("card:")).map(([, card]) => card.url as string));
     expect(savedUrls.sort()).toEqual(capturedUrls.sort());

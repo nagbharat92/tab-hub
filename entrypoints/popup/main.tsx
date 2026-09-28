@@ -1,75 +1,90 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ArrowUpRight, BookOpen, Crop, Highlighter, Layers3, Scissors } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowUpRight, Crop, Layers3, Save, TextSelect } from "lucide-react";
 import type { WorkerRequest, WorkerResponse } from "@/src/types";
 import "@/assets/theme.css";
 import "./popup.css";
 
+function canMark(url?: string): boolean {
+  if (!url) return false;
+  try {
+    const address = new URL(url);
+    return (address.protocol === "https:" || address.protocol === "http:") &&
+      address.hostname !== "chromewebstore.google.com" &&
+      !(address.hostname === "chrome.google.com" && address.pathname.startsWith("/webstore"));
+  } catch { return false; }
+}
+
 function Popup() {
-  const [tab, setTab] = useState<chrome.tabs.Tab | null>(null);
-  const [groupName, setGroupName] = useState<string>("");
+  const [tab, setTab] = useState<chrome.tabs.Tab>();
+  const [group, setGroup] = useState<{ name: string; count: number }>();
+  const [selectedText, setSelectedText] = useState(false);
+  const [shortcuts, setShortcuts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
+    void chrome.commands.getAll().then(commands => setShortcuts(Object.fromEntries(
+      commands.filter(command => command.shortcut).map(command => [command.name, command.shortcut ?? ""])
+    ))).catch(() => undefined);
     void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([active]) => {
-      if (!active || active.url?.startsWith(chrome.runtime.getURL(""))) return;
+      if (!active || (active.pendingUrl ?? active.url)?.startsWith(chrome.runtime.getURL(""))) return;
       setTab(active);
       if (active.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
-        const group = await chrome.tabGroups.get(active.groupId);
-        setGroupName(group.title || "Untitled group");
+        const [savedGroup, members] = await Promise.all([
+          chrome.tabGroups.get(active.groupId), chrome.tabs.query({ groupId: active.groupId })
+        ]);
+        setGroup({ name: savedGroup.title?.trim() || "Untitled group", count: members.length });
       }
-    }).catch(error => setFeedback(String(error)));
+      if (active.id !== undefined && canMark(active.url)) {
+        try {
+          const [result] = await chrome.scripting.executeScript({
+            target: { tabId: active.id },
+            func: () => Boolean(window.getSelection()?.toString().trim())
+          });
+          setSelectedText(Boolean(result?.result));
+        } catch { setSelectedText(false); }
+      }
+    }).catch(cause => setError(`Could not inspect this tab: ${String(cause)}`));
   }, []);
 
-  async function save(request: WorkerRequest) {
+  async function send(request: WorkerRequest) {
     setBusy(true);
-    setFeedback("");
+    setError("");
     try {
       const response = await chrome.runtime.sendMessage<WorkerRequest, WorkerResponse>(request);
       if (!response.ok) throw new Error(response.error);
-      if (response.result && "saved" in response.result) {
-        setFeedback(`Saved ${response.result.saved} links; ${response.result.closed} tabs closed.${response.result.warnings.length ? ` ${response.result.warnings.join(" ")}` : ""}`);
-      } else if (response.result && "fragmentId" in response.result) {
-        setFeedback(`Passage saved${response.result.createdCard ? " as a new reference" : " on its existing card"}. Your tab remains open.`);
-      } else {
-        window.close();
-      }
-    } catch (error) {
-      setFeedback(`${request.type === "start-region" ? "Could not start region capture" : "Save failed. Tabs remain open"}. ${String(error)}`);
-    } finally {
-      setBusy(false);
-    }
+      window.close();
+    } catch (cause) {
+      setError(`${request.type === "start-region" ? "Could not start region capture" : "Save failed. Tabs remain open"}: ${String(cause)}`);
+    } finally { setBusy(false); }
   }
 
-  return (
-    <div className="popup">
-      <div className="popup-brand"><BookOpen size={20} /><strong>Tab Hub</strong></div>
-      <p>Your references, without the open tabs.</p>
-      {tab?.id !== undefined && (
-        <div className="popup-actions">
-          {groupName && <Button disabled={busy} className="w-full justify-between" onClick={() => save({ type: "capture-group", groupId: tab.groupId })}>
-            Save “{groupName}” <Layers3 size={16} />
-          </Button>}
-          <Button disabled={busy} variant="outline" className="w-full justify-between" onClick={() => save({ type: "capture-tab", tabId: tab.id! })}>
-            Save this tab <Scissors size={16} />
-          </Button>
-          <div className="popup-divider" />
-          <Button disabled={busy} variant="ghost" className="w-full justify-between" onClick={() => save({ type: "mark-text", tabId: tab.id! })}>
-            Mark selected text <Highlighter size={16} />
-          </Button>
-          <Button disabled={busy} variant="ghost" className="w-full justify-between" onClick={() => save({ type: "start-region", tabId: tab.id! })}>
-            Mark a visible region <Crop size={16} />
-          </Button>
-        </div>
-      )}
-      <Button variant="ghost" className="w-full justify-between" onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL("hub.html") })}>
-        Open your hub <ArrowUpRight size={16} />
-      </Button>
-      {feedback && <p role="status" className="popup-feedback">{feedback}</p>}
-    </div>
-  );
+  const allowed = canMark(tab?.url);
+  const shortcut = (name: string) => shortcuts[name] ? <kbd>{shortcuts[name]}</kbd> : null;
+  return <div className="popup" aria-label="Tab Hub actions">
+    {tab?.id !== undefined && <>
+      {group && <button className="group-action" type="button" disabled={busy} onClick={() => void send({ type: "capture-group", groupId: tab.groupId })}>
+        <Layers3 size={17} aria-hidden="true" /><span>Save {group.name} · {group.count} {group.count === 1 ? "tab" : "tabs"}</span>
+        {shortcut("save-current-group")}
+      </button>}
+      <button type="button" disabled={busy} onClick={() => void send({ type: "capture-tab", tabId: tab.id! })}>
+        <Save size={17} aria-hidden="true" /><span>Save this tab</span>{shortcut("save-current-tab")}
+      </button>
+      <span className="popup-divider" aria-hidden="true" />
+      <button type="button" disabled={busy || !allowed || !selectedText} onClick={() => void send({ type: "mark-text", tabId: tab.id! })}>
+        <TextSelect size={17} aria-hidden="true" /><span>Save the text you selected</span>{shortcut("mark-selected-text")}
+      </button>
+      <button type="button" disabled={busy || !allowed} onClick={() => void send({ type: "start-region", tabId: tab.id! })}>
+        <Crop size={17} aria-hidden="true" /><span>Save part of the page</span>
+      </button>
+      <span className="popup-divider" aria-hidden="true" />
+    </>}
+    <button type="button" onClick={() => void send({ type: "open-hub" })}>
+      <ArrowUpRight size={17} aria-hidden="true" /><span>Open Tab Hub</span>{shortcut("open-hub")}
+    </button>
+    {error && <p role="status" className="popup-error">{error}</p>}
+  </div>;
 }
 
 createRoot(document.getElementById("root")!).render(<Popup />);

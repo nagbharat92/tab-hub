@@ -4,7 +4,7 @@ import type { SavedCard } from "../../src/types";
 import type { FragmentRecord } from "../../src/media";
 
 const cards: SavedCard[] = [
-  { id: "a", groupId: "g", url: "https://muse.example/one", title: "Beautiful transitions", site: "muse.example", note: "Use for onboarding", order: 0, savedAt: 1 },
+  { id: "a", groupId: "g", url: "https://muse.example/one", title: "Beautiful transitions", site: "muse.example", note: "Use for onboarding", guess: "Editorial pacing", order: 0, savedAt: 1 },
   { id: "b", groupId: "g", url: "https://folio.test/two", title: "Another story", site: "folio.test", note: "", order: 1, savedAt: 1 }
 ];
 const fragments = new Map<string, FragmentRecord>([["b", { cardId: "b", items: [
@@ -14,7 +14,7 @@ const fragments = new Map<string, FragmentRecord>([["b", { cardId: "b", items: [
 
 describe("hub search", () => {
   it("searches titles, sites, notes and fragment text", () => {
-    for (const term of ["transitions", "muse.example", "onboarding"]) expect(searchCards(cards, term, fragments).map(card => card.id)).toEqual(["a"]);
+    for (const term of ["transitions", "muse.example", "onboarding", "editorial"]) expect(searchCards(cards, term, fragments).map(card => card.id)).toEqual(["a"]);
     for (const term of ["folio.test", "copper", "typography", "motion"]) expect(searchCards(cards, term, fragments).map(card => card.id)).toEqual(["b"]);
   });
   it("combines words across fields, ignores case, and never mutates the source", () => {

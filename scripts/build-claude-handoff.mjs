@@ -10,6 +10,7 @@ const packageJson = JSON.parse(await readFile(join(root, "package.json"), "utf8"
 
 const canonicalFiles = [
   ["BRIEF.md", "BRIEF.md"],
+  ["BRIEF-v0.2.md", "BRIEF-v0.2.md"],
   ["SUMMARY.md", "SUMMARY.md"],
   ["HOW_IT_WORKS.md", "HOW_IT_WORKS.md"],
   ["DECISIONS.md", "DECISIONS.md"],
@@ -17,11 +18,11 @@ const canonicalFiles = [
 ];
 
 const screenshotFiles = [
-  ["screenshots/empty-light-desktop.png", "screenshots/01-empty-light-desktop.png"],
-  ["screenshots/ten-light-desktop.png", "screenshots/02-library-light-desktop.png"],
-  ["screenshots/ten-dark-desktop.png", "screenshots/03-library-dark-desktop.png"],
-  ["screenshots/many-dark-narrow.png", "screenshots/04-scale-dark-narrow.png"],
-  ["screenshots/delete-confirmation-light-desktop.png", "screenshots/05-permanent-delete-confirmation.png"]
+  ["process/round-2/screenshots/empty-light-desktop.png", "screenshots/01-empty-light-desktop.png"],
+  ["process/round-2/screenshots/arrival-grid-light-desktop.png", "screenshots/02-library-light-desktop.png"],
+  ["process/round-2/screenshots/arrival-grid-dark-desktop.png", "screenshots/03-library-dark-desktop.png"],
+  ["process/round-2/screenshots/grid-with-panel-light-narrow.png", "screenshots/04-panel-light-narrow.png"],
+  ["process/round-2/screenshots/three-stacked-toasts-light-desktop.png", "screenshots/05-delete-undo.png"]
 ];
 
 const startHere = `# Start here: Tab Hub planning handoff
@@ -32,7 +33,7 @@ This is a deliberately small snapshot of Tab Hub for product and design discussi
 
 ## Suggested reading order
 
-1. \`BRIEF.md\` — original product intent and definition of done
+1. \`BRIEF.md\` and \`BRIEF-v0.2.md\` — original product intent and round-two design delta
 2. \`SUMMARY.md\` — current implementation and verified behavior
 3. \`HOW_IT_WORKS.md\` — the current user-facing experience
 4. \`DECISIONS.md\` — significant choices and alternatives already considered
@@ -65,7 +66,7 @@ The finished delta brief can be handed back to the implementation agent.
 
 ## Current deletion behavior
 
-New removals permanently delete saved links and their locally stored notes, fragments and images only after explicit confirmation. A deletion is not an archive and has no in-app undo. Items archived in version 0.2 are retained in a transitional "Previously archived" view until individually restored or deleted; the upgrade does not erase them. Older downloaded backups can still contain references deleted from the current browser profile. Marking a URL with only an older archived copy now creates a visible new card instead of hiding the fragment.
+New removals hide a selected save or whole page immediately. Each has a five-second undo toast and Cmd/Ctrl+Z; only after expiry are links and relevant local media permanently purged. Older downloaded backups can still contain deleted references. Items archived in version 0.2 remain in a transitional "Previously archived" filter until individually restored or deleted; an upgrade never erases them. Marking a URL with only an older archived copy creates a visible new reference instead of hiding the fragment.
 
 ## Important open product question
 
@@ -76,8 +77,8 @@ The user rejected a plan to automatically fill more cards with generic page imag
 - \`01-empty-light-desktop.png\` — first-run empty hub
 - \`02-library-light-desktop.png\` — populated desktop library
 - \`03-library-dark-desktop.png\` — populated dark theme
-- \`04-scale-dark-narrow.png\` — narrow layout with a several-hundred-item collection
-- \`05-permanent-delete-confirmation.png\` — explicit deletion confirmation (prior archived items remain accessible separately)
+- \`04-panel-light-narrow.png\` — inline narrow thread panel beneath the grid
+- \`05-delete-undo.png\` — independent undo toasts after deletion
 `;
 
 const competitiveContext = `# Competitive context
@@ -97,7 +98,7 @@ The initial research compared OneTab, Toby, Session Buddy, Workona, Tabs Outline
 
 ## Deliberate differentiation
 
-Tab Hub is not a task manager, session restorer, cloud bookmark service or automatic organizer. Its focus is closing reference tabs safely and recovering the exact visual or textual detail later. New removals permanently delete references only after confirmation. Records archived in version 0.2 remain available in a legacy "Previously archived" view until explicitly restored or deleted; they are never purged on upgrade.
+Tab Hub is not a task manager, session restorer, cloud bookmark service or automatic organizer. Its focus is closing reference tabs safely and recovering the exact visual or textual detail later. New removals offer a five-second undo and permanently purge only after expiry. Records archived in version 0.2 remain available in a legacy "Previously archived" filter until explicitly restored or deleted; they are never purged on upgrade.
 `;
 
 const expected = new Map();

@@ -3,6 +3,8 @@ import { isCardArchived } from "./archive";
 import { appendFragment, appendFragmentWithImage, putImage, withCardMediaLock, type Fragment } from "./media";
 import type { PageRectangle } from "./region-overlay";
 import type { SavedCard } from "./types";
+import { normalizePageUrl } from "./urls";
+import { softDeletePrefix, type SoftDeleteJob } from "./soft-delete";
 
 interface SelectionInfo {
   text: string;
@@ -11,6 +13,7 @@ interface SelectionInfo {
 
 export interface MarkResult {
   cardId: string;
+  threadId: string;
   fragmentId: string;
   createdCard: boolean;
   kind: Fragment["kind"];
@@ -32,14 +35,11 @@ async function matchingCard(tab: chrome.tabs.Tab): Promise<{ card: SavedCard; cr
   const url = tab.url;
   if (!url) throw new Error("This tab has no URL; the fragment was not saved.");
   const { cards, archives } = await loadLibrary();
-  const visible = cards.filter(card => !isCardArchived(card, archives));
-  const exact = visible.find(card => card.url === url);
-  const withoutHash = (value: string) => {
-    const parsed = new URL(value);
-    parsed.hash = "";
-    return parsed.href;
-  };
-  const previous = exact ?? visible.find(card => withoutHash(card.url) === withoutHash(url));
+  const records = await chrome.storage.local.get(null);
+  const deleting = new Set(Object.entries(records).filter(([key]) => key.startsWith(softDeletePrefix))
+    .flatMap(([, value]) => (value as SoftDeleteJob).kind === "thread" ? (value as SoftDeleteJob).cardIds : []));
+  const visible = cards.filter(card => !isCardArchived(card, archives) && !deleting.has(card.id));
+  const previous = visible.find(card => normalizePageUrl(card.url) === normalizePageUrl(url));
   if (previous) return { card: previous, createdCard: false };
   const { group, cards: newCards } = makeRecords([tab], { name: "Individual tabs", color: "grey", kind: "single" });
   const card = newCards[0];
@@ -142,7 +142,7 @@ async function markTextUnderLock(tabId: number, selectedText?: string): Promise<
     }
   });
   await signalChange();
-  return { cardId: card.id, fragmentId: fragment.id, createdCard, kind: "text" };
+  return { cardId: card.id, threadId: normalizePageUrl(card.url), fragmentId: fragment.id, createdCard, kind: "text" };
 }
 
 export function markRegion(tabId: number, pageUrl: string, rect: PageRectangle): Promise<MarkResult> {
@@ -156,11 +156,11 @@ async function markRegionUnderLock(tabId: number, pageUrl: string, rect: PageRec
   }
   const crop = await cropVisible(tabId, rect);
   const { card, createdCard } = await matchingCard(tab);
-  const fragment: Fragment = { id: crypto.randomUUID(), cardId: card.id, kind: "region", text: "", savedAt: Date.now() };
+  const fragment: Fragment = { id: crypto.randomUUID(), cardId: card.id, kind: "region", text: "", savedAt: Date.now(), ...(rect.anchor ? { anchor: rect.anchor } : {}) };
   await withCardMediaLock(card.id, async () => {
     await ensureMarkTarget(card.id);
     await appendFragmentWithImage(fragment, crop);
   });
   await signalChange();
-  return { cardId: card.id, fragmentId: fragment.id, createdCard, kind: "region" };
+  return { cardId: card.id, threadId: normalizePageUrl(card.url), fragmentId: fragment.id, createdCard, kind: "region" };
 }

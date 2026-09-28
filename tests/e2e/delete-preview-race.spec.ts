@@ -1,5 +1,5 @@
 import { test, expect, type BrowserContext } from "@playwright/test";
-import { createGroup, launch, newProfile, removeProfile } from "./helpers";
+import { createGroup, deletePageInHub, expectPagePurged, launch, newProfile, removeProfile } from "./helpers";
 import { startFixtureServer } from "../fixtures/pages";
 
 test("an in-flight preview cannot leave a thumbnail after permanent deletion", async () => {
@@ -26,24 +26,20 @@ test("an in-flight preview cannot leave a thumbnail after permanent deletion", a
     const cardId = await hub.evaluate(async () => Object.values(await chrome.storage.local.get(null))
       .find(item => item?.url?.endsWith("/slow/1"))?.id as string);
     await waiting;
-    await hub.getByRole("button", { name: "Delete Delayed image reference 1" }).click();
-    await hub.getByRole("dialog", { name: /Permanently delete Delayed image reference 1/ })
-      .getByRole("button", { name: "Delete permanently" }).click();
-    await expect(hub.getByRole("status")).toContainText("Permanently deleted 1 reference");
+    await deletePageInHub(hub, "Delayed image reference 1");
     releasePreview();
     await expect.poll(() => fixture.previewStats().requests).toBeGreaterThanOrEqual(1);
-    await hub.waitForTimeout(500);
-    const image = await hub.evaluate(async id => new Promise<Blob | undefined>((resolve, reject) => {
+    await expectPagePurged(hub, cardId);
+    await expect.poll(() => hub.evaluate(async id => new Promise<number>((resolve, reject) => {
       const open = indexedDB.open("tab-hub-media", 1);
       open.onsuccess = () => {
         const database = open.result;
         const request = database.transaction("images", "readonly").objectStore("images").get(id);
-        request.onsuccess = () => { database.close(); resolve(request.result as Blob | undefined); };
+        request.onsuccess = () => { database.close(); resolve((request.result as Blob | undefined)?.size ?? 0); };
         request.onerror = () => { database.close(); reject(request.error); };
       };
       open.onerror = () => reject(open.error);
-    }), cardId);
-    expect(image).toBeUndefined();
+    }), cardId)).toBe(0);
   } finally {
     await context?.close();
     await removeProfile(profile);

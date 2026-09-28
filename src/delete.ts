@@ -14,7 +14,7 @@ async function pendingJob(): Promise<DeletionJob | undefined> {
 async function finishDeletion(job: DeletionJob): Promise<void> {
   const ids = new Set(job.cardIds);
   await chrome.storage.local.remove(job.cardIds.flatMap(id => [
-    cardKey(id), noteKey(id), guessKey(id), archivedCardKey(id)
+    cardKey(id), noteKey(id), guessKey(id), archivedCardKey(id), `page:hidden:${id}`
   ]));
 
   const records = await chrome.storage.local.get(null);
@@ -42,6 +42,7 @@ async function finishDeletion(job: DeletionJob): Promise<void> {
       return !remaining[cardKey(key.slice(key.indexOf(":") + 1))];
     }
     if (key.startsWith("archive:card:")) return !remaining[cardKey(key.slice("archive:card:".length))];
+    if (key.startsWith("page:hidden:")) return !remaining[cardKey(key.slice("page:hidden:".length))];
     if (key.startsWith("archive:group:")) {
       const groupId = key.slice("archive:group:".length);
       return !remaining[groupKey(groupId)] && !referencedGroupIds.has(groupId);
@@ -63,7 +64,7 @@ export async function resumePendingDeletion(): Promise<boolean> {
   });
 }
 
-async function deleteReferencesUnderLock(cardIds: string[]): Promise<number> {
+export async function deleteReferencesUnderLock(cardIds: string[]): Promise<number> {
   const ids = [...new Set(cardIds)];
   if (!ids.length) throw new Error("Select at least one reference to delete.");
   if (await pendingJob()) throw new Error("An earlier deletion still needs cleanup. Retry that deletion before starting another.");

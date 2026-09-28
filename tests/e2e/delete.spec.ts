@@ -2,7 +2,7 @@ import { test, expect, type BrowserContext, type Page } from "@playwright/test";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import { strFromU8, unzipSync } from "fflate";
-import { createGroup, launch, newProfile, removeProfile } from "./helpers";
+import { createGroup, deletePageInHub, expectPagePurged, exportBackupFromHub, importBackupInHub, launch, newProfile, removeProfile } from "./helpers";
 import { startFixtureServer } from "../fixtures/pages";
 
 async function mediaForCard(page: Page, cardId: string) {
@@ -34,7 +34,7 @@ async function mediaForCard(page: Page, cardId: string) {
   }, cardId);
 }
 
-test("a card is permanently deleted only after confirmation, including its media and notes", async () => {
+test("a page can be undone, then expiry purges its media and private metadata", async () => {
   const fixture = await startFixtureServer();
   const profile = await newProfile();
   let context: BrowserContext | undefined;
@@ -49,12 +49,8 @@ test("a card is permanently deleted only after confirmation, including its media
     const targetId = await hub.evaluate(async () => Object.values(await chrome.storage.local.get(null))
       .find(record => record?.url?.endsWith("/no-preview"))?.id as string);
     if (!targetId) throw new Error("The saved target card is missing.");
-    const target = hub.getByTestId("reference-card").filter({ hasText: "A page with no preview" });
-    await target.getByRole("button", { name: "Edit A page with no preview" }).click();
-    await hub.locator('textarea[id^="note-"]').fill("A detail to remove");
-    await hub.getByRole("button", { name: "Save changes" }).click();
-    await hub.getByRole("button", { name: "Done" }).click();
     await hub.evaluate(async id => chrome.storage.local.set({
+      [`note:${id}`]: "A detail to remove",
       [`guess:${id}`]: { value: "A guess to remove", source: "user" },
       [`archive:card:${id}`]: { archivedAt: null }
     }), targetId);
@@ -76,15 +72,15 @@ test("a card is permanently deleted only after confirmation, including its media
     await expect.poll(async () => (await mediaForCard(hub, targetId)).fragmentCount).toBe(2);
     expect((await mediaForCard(hub, targetId)).fragmentImages.some(bytes => bytes > 0)).toBe(true);
 
-    await target.getByRole("button", { name: "Delete A page with no preview" }).click();
-    const confirm = hub.getByRole("dialog", { name: /Permanently delete A page with no preview/ });
-    await expect(confirm).toContainText("cannot be undone");
-    await confirm.getByRole("button", { name: "Cancel" }).click();
-    await expect(target).toBeVisible();
-    await target.getByRole("button", { name: "Delete A page with no preview" }).click();
-    await confirm.getByRole("button", { name: "Delete permanently" }).click();
-    await expect(hub.getByRole("status")).toContainText("Permanently deleted 1 reference");
+    await deletePageInHub(hub, "A page with no preview");
     await expect(hub.getByTestId("reference-card")).toHaveCount(1);
+    expect(await hub.evaluate(async id => (await chrome.storage.local.get(`card:${id}`))[`card:${id}`], targetId))
+      .toBeTruthy();
+    await hub.getByRole("button", { name: "Undo" }).first().click();
+    await expect(hub.getByTestId("reference-card")).toHaveCount(2);
+    expect((await mediaForCard(hub, targetId)).fragmentCount).toBe(2);
+    await deletePageInHub(hub, "A page with no preview");
+    await expectPagePurged(hub, targetId);
     const records = await hub.evaluate(() => chrome.storage.local.get(null));
     expect(records[`card:${targetId}`]).toBeUndefined();
     expect(records[`note:${targetId}`]).toBeUndefined();
@@ -93,6 +89,7 @@ test("a card is permanently deleted only after confirmation, including its media
     expect(records["deletion:pending"]).toBeUndefined();
     expect(Object.values(records).find(value => value?.cardIds)?.cardIds).toHaveLength(1);
     expect(await mediaForCard(hub, targetId)).toEqual({ image: 0, fragmentCount: 0, fragmentImages: [] });
+    await expect(hub.getByRole("dialog")).toHaveCount(0);
     await context.close();
     context = undefined;
     const restarted = await launch(profile);
@@ -123,7 +120,7 @@ test("marking a page with only a legacy archived match creates a visible card in
     const oldId = await hub.evaluate(async () =>
       Object.values(await chrome.storage.local.get(null)).find(item => item?.url?.endsWith("/no-preview"))?.id as string);
     await hub.evaluate(id => chrome.storage.local.set({ [`archive:card:${id}`]: { archivedAt: Date.now() } }), oldId);
-    await expect(hub.getByRole("button", { name: "Previously archived 1" })).toBeVisible();
+    await expect(hub.getByText("Save a tab from the Tab Hub button in your toolbar.")).toBeVisible();
     await expect(hub.getByTestId("reference-card")).toHaveCount(0);
 
     const opening = context.waitForEvent("page");
@@ -137,7 +134,6 @@ test("marking a page with only a legacy archived match creates a visible card in
     await source.mouse.down();
     await source.mouse.move(310, 310, { steps: 5 });
     await source.mouse.up();
-    await expect(hub.getByRole("button", { name: "All references 1" })).toBeVisible();
     await expect(hub.getByTestId("reference-card")).toHaveCount(1);
     const cards = await hub.evaluate(async () => Object.entries(await chrome.storage.local.get(null))
       .filter(([key]) => key.startsWith("card:")).map(([, card]) => card.id as string));
@@ -149,16 +145,21 @@ test("marking a page with only a legacy archived match creates a visible card in
     expect(await hub.evaluate(id => chrome.runtime.sendMessage({
       type: "mark-text", tabId: id, selectedText: "A newer visible memory"
     }), tab.id)).toMatchObject({ ok: true, result: { cardId: newId, createdCard: false } });
-    await expect(hub.getByTestId("reference-card").locator("blockquote")).toContainText("A newer visible memory");
-
-    await hub.getByRole("button", { name: "Previously archived 1" }).click();
-    await hub.getByRole("button", { name: "Delete A page with no preview" }).click();
-    await hub.getByRole("dialog", { name: /Permanently delete A page with no preview/ })
-      .getByRole("button", { name: "Delete permanently" }).click();
-    await expect(hub.getByRole("status")).toContainText("Permanently deleted 1 reference");
-    await hub.getByRole("button", { name: "All references 1" }).click();
+    await expect(hub.getByTestId("reference-card").locator("span.face-passage")).toContainText("A newer visible memory");
+    await hub.getByRole("button", { name: "Filter", exact: true }).click();
+    await hub.getByRole("menuitemcheckbox", { name: "Previously archived" }).click();
+    await hub.getByRole("button", { name: "View A page with no preview" }).click();
+    await hub.getByRole("button", { name: `Delete save ${oldId}` }).click();
+    await expect.poll(() => hub.evaluate(async () => Object.entries(await chrome.storage.local.get(null))
+      .find(([key]) => key.startsWith("soft:delete:"))?.[1]?.kind as string | undefined)).toBe("page");
+    await expectPagePurged(hub, oldId);
+    expect(await hub.evaluate(async id => (await chrome.storage.local.get(`archive:card:${id}`))[`archive:card:${id}`], oldId))
+      .toBeUndefined();
+    await hub.getByRole("button", { name: "Filter", exact: true }).click();
+    await hub.getByRole("menuitemcheckbox", { name: "All", exact: true }).click();
     await expect(hub.getByTestId("reference-card")).toHaveCount(1);
     expect((await mediaForCard(hub, newId)).fragmentCount).toBe(2);
+    expect(await hub.evaluate(async id => (await chrome.storage.local.get(`card:${id}`))[`card:${id}`], newId)).toBeTruthy();
   } finally {
     await context?.close();
     await removeProfile(profile);
@@ -166,7 +167,60 @@ test("marking a page with only a legacy archived match creates a visible card in
   }
 });
 
-test("delete selected removes all matched cards, including those beyond the first rendered batch", async () => {
+test("deleting the last visible save purges its empty card but preserves archived history on the same URL", async () => {
+  const profile = await newProfile();
+  let context: BrowserContext | undefined;
+  try {
+    const opened = await launch(profile);
+    context = opened.context;
+    const hub = await context.newPage();
+    await hub.goto(`chrome-extension://${opened.id}/hub.html`);
+    await hub.evaluate(async () => {
+      const now = Date.now();
+      await chrome.storage.local.set({
+        "group:old": { id: "old", name: "Old collection", color: "blue", kind: "group", savedAt: now - 1000, cardIds: ["historical"] },
+        "group:new": { id: "new", name: "Current collection", color: "blue", kind: "group", savedAt: now, cardIds: ["live"] },
+        "card:historical": { id: "historical", groupId: "old", url: "https://example.test/item?utm_source=old#part",
+          title: "Old archived page", site: "example.test", savedAt: now - 1000, order: 0, note: "" },
+        "card:live": { id: "live", groupId: "new", url: "https://example.test/item",
+          title: "Current page", site: "example.test", savedAt: now, order: 0, note: "" },
+        "archive:card:historical": { archivedAt: now - 500 }
+      });
+    });
+    await expect(hub.getByTestId("reference-card")).toHaveCount(1);
+    await hub.getByRole("button", { name: "View Current page" }).click();
+    await hub.getByRole("button", { name: "Delete save live" }).click();
+    await expect(hub.getByRole("button", { name: "Undo" })).toBeVisible();
+    await expect(hub.getByTestId("reference-card")).toHaveCount(0);
+    await expectPagePurged(hub, "live");
+    const records = await hub.evaluate(() => chrome.storage.local.get(null));
+    expect(records["card:historical"]).toBeTruthy();
+    expect(records["archive:card:historical"]).toMatchObject({ archivedAt: expect.any(Number) });
+    expect(records["group:old"]?.cardIds).toEqual(["historical"]);
+    expect(records["card:live"]).toBeUndefined();
+    expect(records["group:new"]).toBeUndefined();
+    expect(records["page:hidden:live"]).toBeUndefined();
+
+    await hub.getByRole("button", { name: "More" }).click();
+    await hub.getByRole("menuitem", { name: "Previously archived" }).click();
+    await expect(hub.getByRole("button", { name: "View Old archived page" })).toBeVisible();
+    const downloading = hub.waitForEvent("download");
+    await exportBackupFromHub(hub);
+    const backup = join(profile, "archived-survivor.tabhub");
+    await (await downloading).saveAs(backup);
+    const manifestBytes = unzipSync(new Uint8Array(await readFile(backup)))["manifest.json"];
+    if (!manifestBytes) throw new Error("The backup is missing its manifest.");
+    const manifest = JSON.parse(strFromU8(manifestBytes)) as { cards: { id: string }[]; archives: { cards: Record<string, unknown> } };
+    expect(manifest.cards.map(card => card.id)).toEqual(["historical"]);
+    expect(manifest.archives.cards.historical).toMatchObject({ archivedAt: expect.any(Number) });
+  } finally {
+    await context?.close();
+    await removeProfile(profile);
+  }
+});
+
+test("repeated Delete keys remove pages beyond the first rendered batch without multi-select", async () => {
+  test.setTimeout(150_000);
   const profile = await newProfile();
   let context: BrowserContext | undefined;
   try {
@@ -186,24 +240,29 @@ test("delete selected removes all matched cards, including those beyond the firs
       }]));
       await chrome.storage.local.set({ [`group:${group.id}`]: group, ...cards });
     });
-    await expect(hub.getByRole("button", { name: "All references 55" })).toBeVisible();
-    await hub.getByRole("button", { name: "Select references" }).click();
-    await hub.getByRole("button", { name: "Select all matches" }).click();
-    await expect(hub.getByText("55 selected")).toBeVisible();
-    await hub.getByRole("button", { name: "Delete selected permanently" }).click();
-    await hub.getByRole("dialog", { name: /Permanently delete 55 selected references/ })
-      .getByRole("button", { name: "Delete permanently" }).click();
-    await expect(hub.getByRole("status")).toContainText("Permanently deleted 55 references");
+    await expect(hub.getByTestId("reference-card").first()).toBeVisible();
+    await expect(hub.getByRole("button", { name: "Select references" })).toHaveCount(0);
+    await hub.getByTestId("reference-card").first().click();
+    for (let index = 0; index < 55; index++) {
+      const selected = hub.locator('[data-testid="reference-card"].is-selected');
+      await expect(selected).toHaveCount(1);
+      const id = await selected.getAttribute("data-thread-id");
+      if (!id) throw new Error("The selected thread is missing its ID.");
+      await hub.keyboard.press("Delete");
+      await expect(hub.locator(`[data-thread-id="${id}"]`)).toHaveCount(0);
+    }
+    await expect(hub.getByText("Save a tab from the Tab Hub button in your toolbar.")).toBeVisible();
+    await expect.poll(() => hub.evaluate(async () => Object.keys(await chrome.storage.local.get(null))
+      .filter(key => key.startsWith("card:") || key.startsWith("soft:delete:")).length), { timeout: 30_000 }).toBe(0);
     const keys = await hub.evaluate(async () => Object.keys(await chrome.storage.local.get(null)));
     expect(keys.filter(key => key.startsWith("card:") || key.startsWith("group:") || key.startsWith("deletion:"))).toEqual([]);
-    await expect(hub.getByRole("heading", { name: "Nothing tucked away yet." })).toBeVisible();
   } finally {
     await context?.close();
     await removeProfile(profile);
   }
 });
 
-test("deleting a collection includes hidden legacy cards and removes its archive state", async () => {
+test("pages in a legacy group, including archived pages, are each purged without orphaned archive state", async () => {
   const fixture = await startFixtureServer();
   const profile = await newProfile();
   let context: BrowserContext | undefined;
@@ -225,16 +284,21 @@ test("deleting a collection includes hidden legacy cards and removes its archive
       [`archive:card:${cardId}`]: { archivedAt: Date.now() },
       [`archive:group:${groupId}`]: { archivedAt: null, epoch: "legacy" }
     }), { groupId: saved.groupId, cardId: saved.firstCardId });
-    await expect(hub.getByRole("button", { name: "Collected mistakes 1" })).toBeVisible();
-    await hub.getByRole("button", { name: "Collected mistakes 1" }).click();
-    await hub.getByRole("button", { name: "Delete collection" }).click();
-    const confirm = hub.getByRole("dialog", { name: /Permanently delete Collected mistakes/ });
-    await expect(confirm).toContainText("including previously archived ones");
-    await confirm.getByRole("button", { name: "Delete permanently" }).click();
-    await expect(hub.getByRole("status")).toContainText("Permanently deleted 2 references");
+    const survivingId = await hub.evaluate(async id => {
+      const records = await chrome.storage.local.get(null);
+      return Object.values(records).find(item => item?.groupId === id && item?.id !== records[`group:${id}`]?.cardIds[0])?.id as string;
+    }, saved.groupId);
+    await deletePageInHub(hub, "An enormously tall page");
+    await expectPagePurged(hub, survivingId);
+    expect(await hub.evaluate(async id => Boolean((await chrome.storage.local.get(`card:${id}`))[`card:${id}`]), saved.firstCardId))
+      .toBe(true);
+    await hub.getByRole("button", { name: "More" }).click();
+    await hub.getByRole("menuitem", { name: "Previously archived" }).click();
+    await deletePageInHub(hub, "A page with no preview");
+    await expectPagePurged(hub, saved.firstCardId);
     const records = await hub.evaluate(() => chrome.storage.local.get(null));
     expect(Object.keys(records).filter(key => /^(card:|group:|archive:)/.test(key))).toEqual([]);
-    await expect(hub.getByRole("heading", { name: "Nothing tucked away yet." })).toBeVisible();
+    await expect(hub.getByText("Save a tab from the Tab Hub button in your toolbar.")).toBeVisible();
   } finally {
     await context?.close();
     await removeProfile(profile);
@@ -268,6 +332,9 @@ test("an interrupted media cleanup resumes after reopening the hub", async () =>
       request.onerror = () => reject(request.error);
     }), cardId);
     expect((await mediaForCard(hub, cardId)).image).toBeGreaterThan(0);
+    for (const other of context.pages()) {
+      if (other !== hub && other.url().startsWith(`chrome-extension://${opened.id}/hub.html`)) await other.close();
+    }
     await hub.evaluate(() => {
       const original = IDBDatabase.prototype.transaction;
       IDBDatabase.prototype.transaction = function (...args: Parameters<IDBDatabase["transaction"]>) {
@@ -275,16 +342,21 @@ test("an interrupted media cleanup resumes after reopening the hub", async () =>
         return original.apply(this, args);
       };
     });
-    await hub.getByRole("button", { name: "Delete A page with no preview" }).click();
-    await hub.getByRole("dialog", { name: /Permanently delete A page with no preview/ })
-      .getByRole("button", { name: "Delete permanently" }).click();
+    await deletePageInHub(hub, "A page with no preview");
+    await expect.poll(() => hub.evaluate(async () =>
+      (await chrome.storage.local.get("deletion:pending"))["deletion:pending"]?.cardIds),
+      { timeout: 20_000 }).toEqual([cardId]);
     await expect(hub.getByRole("alert")).toContainText("Simulated media failure");
     await expect(hub.getByRole("button", { name: "Retry deletion cleanup" })).toBeVisible();
+    await expect(hub.getByTestId("reference-card")).toHaveCount(0);
+    const downloads: string[] = [];
+    hub.on("download", download => downloads.push(download.suggestedFilename()));
+    await exportBackupFromHub(hub);
+    await hub.evaluate(() => navigator.locks.request("tab-hub-permanent-delete", () => true));
+    await expect(hub.getByRole("alert")).toContainText("A permanent deletion is still finishing");
+    expect(downloads).toEqual([]);
     expect(await hub.evaluate(async () => (await chrome.storage.local.get("deletion:pending"))["deletion:pending"]?.cardIds))
       .toEqual([cardId]);
-    await expect(hub.getByTestId("reference-card")).toHaveCount(0);
-    await hub.getByRole("button", { name: "Export backup" }).click();
-    await expect(hub.getByText("A permanent deletion is still finishing", { exact: false })).toBeVisible();
     await context.close();
     context = undefined;
     const restarted = await launch(profile);
@@ -317,18 +389,18 @@ test("a failure to record deletion intent keeps the saved reference unchanged", 
     await hub.evaluate(() => {
       const original = chrome.storage.local.set.bind(chrome.storage.local);
       chrome.storage.local.set = async items => {
-        if (Object.keys(items).includes("deletion:pending")) throw new Error("Simulated disk refusal");
+        if (Object.keys(items).some(key => key.startsWith("soft:delete:"))) throw new Error("Simulated disk refusal");
         return original(items);
       };
     });
 
-    await hub.getByRole("button", { name: "Delete A page with no preview" }).click();
-    await hub.getByRole("dialog", { name: /Permanently delete A page with no preview/ })
-      .getByRole("button", { name: "Delete permanently" }).click();
+    await hub.getByRole("button", { name: "View A page with no preview" }).click();
+    await hub.getByRole("button", { name: "Delete page A page with no preview" }).click();
     await expect(hub.getByRole("alert")).toContainText("Simulated disk refusal");
     await expect(hub.getByTestId("reference-card")).toHaveCount(1);
     expect(await hub.evaluate(async () => Object.keys(await chrome.storage.local.get(null))
-      .filter(key => key.startsWith("card:") || key === "deletion:pending"))).toHaveLength(1);
+      .filter(key => key.startsWith("card:") || key.startsWith("soft:delete:") || key === "deletion:pending"))).toHaveLength(1);
+    await expect(hub.getByRole("dialog")).toHaveCount(0);
   } finally {
     await context?.close();
     await removeProfile(profile);
@@ -349,23 +421,22 @@ test("new backups omit deleted links, but an older backup can restore them delib
     expect(await hub.evaluate(id => chrome.runtime.sendMessage({ type: "capture-group", groupId: id }), groupId))
       .toMatchObject({ ok: true });
     const firstDownload = hub.waitForEvent("download");
-    await hub.getByRole("button", { name: "Export backup" }).click();
+    await exportBackupFromHub(hub);
     const oldBackup = join(profile, "before-deletion.tabhub");
     await (await firstDownload).saveAs(oldBackup);
-    await hub.getByRole("button", { name: "Delete A page with no preview" }).click();
-    await hub.getByRole("dialog", { name: /Permanently delete A page with no preview/ })
-      .getByRole("button", { name: "Delete permanently" }).click();
-    await expect(hub.getByRole("status")).toContainText("Permanently deleted 1 reference");
+    const cardId = await hub.evaluate(async () => Object.values(await chrome.storage.local.get(null))
+      .find(item => item?.url?.endsWith("/no-preview"))?.id as string);
+    await deletePageInHub(hub, "A page with no preview");
+    await expectPagePurged(hub, cardId);
     const secondDownload = hub.waitForEvent("download");
-    await hub.getByRole("button", { name: "Export backup" }).click();
+    await exportBackupFromHub(hub);
     const newBackup = join(profile, "after-deletion.tabhub");
     await (await secondDownload).saveAs(newBackup);
     const manifestBytes = unzipSync(new Uint8Array(await readFile(newBackup)))["manifest.json"];
     if (!manifestBytes) throw new Error("The exported backup has no manifest.");
     const manifest = JSON.parse(strFromU8(manifestBytes)) as { cards: unknown[]; groups: unknown[]; images: unknown[]; fragments: unknown[] };
     expect(manifest).toMatchObject({ cards: [], groups: [], images: [], fragments: [] });
-    await hub.getByLabel("Choose a Tab Hub backup").setInputFiles(oldBackup);
-    await expect(hub.getByRole("status")).toContainText("Restored or verified 1 reference");
+    await importBackupInHub(hub, oldBackup);
     await expect(hub.getByTestId("reference-card")).toHaveCount(1);
   } finally {
     await context?.close();
@@ -393,15 +464,14 @@ test("a pre-delete backup restores one missing member of a surviving collection"
       return { groupId: group?.id as string, ids: group?.cardIds as string[] };
     });
     const downloadStarted = hub.waitForEvent("download");
-    await hub.getByRole("button", { name: "Export backup" }).click();
+    await exportBackupFromHub(hub);
     const backup = join(profile, "group-before-delete.tabhub");
     await (await downloadStarted).saveAs(backup);
-    await hub.getByRole("button", { name: "Delete A page with no preview" }).click();
-    await hub.getByRole("dialog", { name: /Permanently delete A page with no preview/ })
-      .getByRole("button", { name: "Delete permanently" }).click();
-    await expect(hub.getByRole("button", { name: "Saved together 1" })).toBeVisible();
-    await hub.getByLabel("Choose a Tab Hub backup").setInputFiles(backup);
-    await expect(hub.getByRole("status")).toContainText("Restored or verified 2 references");
+    const deletedId = before.ids[0]!;
+    await deletePageInHub(hub, "A page with no preview");
+    await expectPagePurged(hub, deletedId);
+    await expect(hub.getByTestId("reference-card")).toHaveCount(1);
+    await importBackupInHub(hub, backup);
     await expect(hub.getByTestId("reference-card")).toHaveCount(2);
     const after = await hub.evaluate(async id => (await chrome.storage.local.get(`group:${id}`))[`group:${id}`].cardIds as string[], before.groupId);
     expect(after).toEqual(before.ids);
@@ -441,6 +511,9 @@ test("a pre-delete backup restores one missing member of a surviving collection"
           };
           request.onerror = () => reject(request.error);
         }), cardId);
+        const remover = await context.newPage();
+        await remover.goto(`chrome-extension://${opened.id}/hub.html`);
+        await expect(remover.getByRole("button", { name: "View A page with no preview" })).toBeVisible();
         await exporter.evaluate(() => {
           const original = chrome.storage.local.get.bind(chrome.storage.local);
           let release = () => {};
@@ -461,16 +534,13 @@ test("a pre-delete backup restores one missing member of a surviving collection"
           });
         });
         const downloadStarted = exporter.waitForEvent("download");
-        await exporter.getByRole("button", { name: "Export backup" }).click();
+        await exportBackupFromHub(exporter);
         await expect.poll(() => exporter.evaluate(() =>
           (globalThis as typeof globalThis & { exportPaused: boolean }).exportPaused
         )).toBe(true);
 
-        const remover = await context.newPage();
-        await remover.goto(`chrome-extension://${opened.id}/hub.html`);
-        await remover.getByRole("button", { name: "Delete A page with no preview" }).click();
-        await remover.getByRole("dialog", { name: /Permanently delete A page with no preview/ })
-          .getByRole("button", { name: "Delete permanently" }).click();
+        await remover.getByRole("button", { name: "View A page with no preview" }).click();
+        await remover.getByRole("button", { name: "Delete page A page with no preview" }).click();
         expect(await remover.evaluate(async id => Boolean((await chrome.storage.local.get(`card:${id}`))[`card:${id}`]), cardId)).toBe(true);
         await exporter.evaluate(() => (globalThis as typeof globalThis & { releaseExport: () => void }).releaseExport());
         const backup = join(profile, "concurrent-export.tabhub");
@@ -481,7 +551,8 @@ test("a pre-delete backup restores one missing member of a surviving collection"
         expect(snapshot.cards.map(item => item.id)).toEqual([cardId]);
         expect(snapshot.fragments.map(item => item.cardId)).toEqual([cardId]);
         expect(snapshot.images.map(item => item.id)).toEqual([cardId]);
-        await expect(remover.getByRole("status")).toContainText("Permanently deleted 1 reference");
+        await expect(remover.getByRole("button", { name: "Undo" }).first()).toBeVisible();
+        await expectPagePurged(remover, cardId);
         expect(await mediaForCard(remover, cardId)).toEqual({ image: 0, fragmentCount: 0, fragmentImages: [] });
       } finally {
         await context?.close();
@@ -490,7 +561,7 @@ test("a pre-delete backup restores one missing member of a surviving collection"
       }
     });
 
-    test("an in-flight note save cannot recreate private text after deletion", async () => {
+    test("a stale second hub cannot retain a private note after page deletion", async () => {
       const fixture = await startFixtureServer();
       const profile = await newProfile();
       let context: BrowserContext | undefined;
@@ -504,40 +575,20 @@ test("a pre-delete backup restores one missing member of a surviving collection"
           .toMatchObject({ ok: true });
         const cardId = await editor.evaluate(async () => Object.values(await chrome.storage.local.get(null))
           .find(item => item?.url?.endsWith("/no-preview"))?.id as string);
+        await editor.evaluate(id => chrome.storage.local.set({ [`note:${id}`]: "A private retained note" }), cardId);
         const remover = await context.newPage();
         await remover.goto(`chrome-extension://${opened.id}/hub.html`);
-        await editor.getByRole("button", { name: "Edit A page with no preview" }).click();
-        await editor.locator('textarea[id^="note-"]').fill("A private in-flight note");
-        await editor.evaluate(() => {
-          const original = chrome.storage.local.set.bind(chrome.storage.local);
-          let release = () => {};
-          const gate = new Promise<void>(resolve => { release = resolve; });
-          Object.assign(globalThis, { notePaused: false, releaseNote: release });
-          Object.defineProperty(chrome.storage.local, "set", {
-            configurable: true,
-            value: async (items: Record<string, unknown>) => {
-              if (Object.keys(items).some(key => key.startsWith("note:"))) {
-                Object.assign(globalThis, { notePaused: true });
-                await gate;
-              }
-              return original(items);
-            }
-          });
-
-        });
-        await editor.getByRole("button", { name: "Save changes" }).click();
-        await expect.poll(() => editor.evaluate(() =>
-          (globalThis as typeof globalThis & { notePaused: boolean }).notePaused
-        )).toBe(true);
-        await remover.getByRole("button", { name: "Delete A page with no preview" }).click();
-        await remover.getByRole("dialog", { name: /Permanently delete A page with no preview/ })
-          .getByRole("button", { name: "Delete permanently" }).click();
+        await editor.getByRole("searchbox", { name: "Search references" }).fill("private retained note");
+        await expect(editor.getByTestId("reference-card")).toHaveCount(1);
+        await deletePageInHub(remover, "A page with no preview");
         expect(await remover.evaluate(async id => Boolean((await chrome.storage.local.get(`card:${id}`))[`card:${id}`]), cardId)).toBe(true);
-        await editor.evaluate(() => (globalThis as typeof globalThis & { releaseNote: () => void }).releaseNote());
-        await expect(remover.getByRole("status")).toContainText("Permanently deleted 1 reference");
+        await expect(editor.getByTestId("reference-card")).toHaveCount(0);
+        await expectPagePurged(remover, cardId);
         const records = await remover.evaluate(() => chrome.storage.local.get(null));
         expect(records[`note:${cardId}`]).toBeUndefined();
         expect(records[`card:${cardId}`]).toBeUndefined();
+        await editor.reload();
+        await expect(editor.getByText("Save a tab from the Tab Hub button in your toolbar.")).toBeVisible();
       } finally {
         await context?.close();
         await removeProfile(profile);
