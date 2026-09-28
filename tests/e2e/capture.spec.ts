@@ -149,7 +149,8 @@ test("restricted browser pages retain their URL even when content cannot be insp
     await expect(hub.getByTestId("reference-card")).toHaveCount(1);
     const urls = await hub.evaluate(async () => Object.values(await chrome.storage.local.get(null)).filter(item => item?.url).map(item => item.url as string));
     expect(urls).toEqual(["chrome://settings/"]);
-    await expect(hub.getByTestId("reference-card").locator(".visual-fallback")).toBeVisible();
+    await expect(hub.getByTestId("reference-card").locator(".face-page:not(.has-image) .face-title")).toBeVisible();
+    await expect(hub.getByTestId("reference-card").locator("img")).toHaveCount(0);
   } finally {
     await context?.close();
     await removeProfile(profile);

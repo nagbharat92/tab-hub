@@ -18,18 +18,22 @@ test("hub displays native groups, local visuals and intentional fallbacks; searc
     const saved = await page.evaluate(id => chrome.runtime.sendMessage({ type: "capture-group", groupId: id }), groupId);
     expect(saved).toMatchObject({ ok: true, result: { saved: 6 } });
     await expect(page.getByTestId("reference-card")).toHaveCount(6);
-    await expect(page.getByRole("button", { name: /Collected for layout/ })).toBeVisible();
-    await expect(page.getByLabel("No image available for A page with no preview")).toBeVisible();
-    await expect(page.getByLabel("No image available for A page with a broken preview")).toBeVisible();
-    const image = page.getByTestId("reference-card").filter({ hasText: "An enormously tall page" }).locator(".card-visual img");
+    await page.getByRole("button", { name: "Filter", exact: true }).click();
+    await expect(page.getByRole("menuitemcheckbox", { name: "Collected for layout" })).toBeVisible();
+    await page.getByRole("button", { name: "Filter", exact: true }).click();
+    for (const title of ["A page with no preview", "A page with a broken preview"]) {
+      await expect(page.getByTestId("reference-card").filter({ hasText: title }).locator(".face-page:not(.has-image)")).toBeVisible();
+    }
+    const image = page.getByTestId("reference-card").filter({ hasText: "An enormously tall page" }).locator(".page-image");
     await expect(image).toBeVisible();
     await expect.poll(() => image.evaluate(node => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-    const imageSources = await page.locator(".card-visual img").evaluateAll(nodes => nodes.map(node => (node as HTMLImageElement).src));
+    const imageSources = await page.locator(".page-image").evaluateAll(nodes => nodes.map(node => (node as HTMLImageElement).src));
+    expect(imageSources.length).toBeGreaterThan(0);
     expect(imageSources.every(source => source.startsWith("blob:"))).toBe(true);
 
-    await page.getByRole("textbox", { name: "Search references" }).fill("no preview");
+    await page.getByRole("searchbox", { name: "Search references" }).fill("no preview");
     await expect(page.getByTestId("reference-card")).toHaveCount(1);
-    await page.getByRole("button", { name: "Clear search" }).click();
+    await page.getByRole("searchbox", { name: "Search references" }).fill("");
     await expect(page.getByTestId("reference-card")).toHaveCount(6);
     expect(errors).toEqual([]);
   } finally {

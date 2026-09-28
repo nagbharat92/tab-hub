@@ -1,5 +1,5 @@
 import { test, expect, type BrowserContext } from "@playwright/test";
-import { createGroup, launch, newProfile, removeProfile } from "./helpers";
+import { createGroup, deletePageInHub, expectPagePurged, launch, newProfile, removeProfile } from "./helpers";
 import { startFixtureServer } from "../fixtures/pages";
 
 test("deleting the last card in the selected collection returns to the remaining library", async () => {
@@ -17,14 +17,15 @@ test("deleting the last card in the selected collection returns to the remaining
       .toMatchObject({ ok: true });
     expect(await hub.evaluate(id => chrome.runtime.sendMessage({ type: "capture-group", groupId: id }), second.groupId))
       .toMatchObject({ ok: true });
-    await hub.getByRole("button", { name: "First collection 1" }).click();
-    await hub.getByRole("button", { name: "Delete A page with no preview" }).click();
-    await hub.getByRole("dialog", { name: /Permanently delete A page with no preview/ })
-      .getByRole("button", { name: "Delete permanently" }).click();
-    await expect(hub.getByRole("status")).toContainText("Permanently deleted 1 reference");
-    await expect(hub.getByRole("button", { name: "All references 1" })).toHaveClass(/is-selected/);
+    const firstId = await hub.evaluate(async () => Object.values(await chrome.storage.local.get(null))
+      .find(item => item?.url?.endsWith("/no-preview"))?.id as string);
+    await hub.getByRole("button", { name: "Filter", exact: true }).click();
+    await hub.getByRole("menuitemcheckbox", { name: "First collection" }).click();
+    await expect(hub.getByTestId("reference-card")).toHaveCount(1);
+    await deletePageInHub(hub, "A page with no preview");
     await expect(hub.getByTestId("reference-card")).toHaveCount(1);
     await expect(hub.getByTestId("reference-card")).toContainText("An enormously tall page");
+    await expectPagePurged(hub, firstId);
   } finally {
     await context?.close();
     await removeProfile(profile);

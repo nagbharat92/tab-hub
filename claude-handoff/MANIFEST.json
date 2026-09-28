@@ -1,12 +1,17 @@
 {
   "format": "tab-hub-claude-handoff",
   "version": 1,
-  "productVersion": "0.3.0",
+  "productVersion": "0.4.0",
   "files": [
     {
       "path": "BLOCKERS.md",
-      "bytes": 2075,
-      "sha256": "0c97d85b6cbba257647e30687fc6cff2e925f9769570a2ebd0b2a72eb8171fb9"
+      "bytes": 2417,
+      "sha256": "4ed03e7cfeedb0af85e7de5a8c2e0694108c9ee353db050cbd146f5d503e2e6a"
+    },
+    {
+      "path": "BRIEF-v0.2.md",
+      "bytes": 25689,
+      "sha256": "ad664903d26971f121c0a345f11f459a273240ca80791f31304fbee64815a415"
     },
     {
       "path": "BRIEF.md",
@@ -15,53 +20,53 @@
     },
     {
       "path": "COMPETITIVE_CONTEXT.md",
-      "bytes": 2408,
-      "sha256": "f6ce5853ac734b7810650c674b6bf7b097f67a3f274d257dab16a171aa6b63d8"
+      "bytes": 2421,
+      "sha256": "429b9d83da48ed17d97d6bed8614e0ab31f4521c05234dcc3bfe4468d57c081b"
     },
     {
       "path": "DECISIONS.md",
-      "bytes": 10784,
-      "sha256": "fd63a8005ac1e14aa25f5c5cf225e76b56928a3f49e5cfc718f43d87a135d772"
+      "bytes": 12063,
+      "sha256": "668dfe8b1bd6b1daef625952c2820ae81b6bdffe50bf10ea72d78ee32746370e"
     },
     {
       "path": "HOW_IT_WORKS.md",
-      "bytes": 7500,
-      "sha256": "e8353d9f74eb98f59bb11a41c7694691d32c1973ca76f6281eb9a9c5b33bd8c9"
+      "bytes": 4792,
+      "sha256": "fa294623a39790c06886b62ea2c808d8b67d76666ca68c05cc2d7b9ea7329616"
     },
     {
       "path": "screenshots/01-empty-light-desktop.png",
-      "bytes": 63034,
-      "sha256": "892967e7b2b642009d9176da4507f2fe73530997167664e26c5359e88a92862a"
+      "bytes": 12488,
+      "sha256": "b20767aaaabb351f8d4737d5ea6600125a539f2bdea0ed601d0a4d7e0d01eef7"
     },
     {
       "path": "screenshots/02-library-light-desktop.png",
-      "bytes": 271558,
-      "sha256": "30a8136b7df3d94261ef83aabbcb0e7329e4cb9d251509a7799dc9ea6a029e7d"
+      "bytes": 199722,
+      "sha256": "dda977eb14c86be077d66398fe78eff6a7c5c8fea1985b7ce6f5595fdbe94c5d"
     },
     {
       "path": "screenshots/03-library-dark-desktop.png",
-      "bytes": 265245,
-      "sha256": "77986e7960d4bc1f1d45724568e321733804f0d89f6399deff62d398f228238a"
+      "bytes": 137192,
+      "sha256": "edf6df05f72a5ca1c44989e03706690a4c8d33dfa55f5bc7b01a761f5d1fd0d4"
     },
     {
-      "path": "screenshots/04-scale-dark-narrow.png",
-      "bytes": 41434,
-      "sha256": "1483a0303887171c36e7ffe485d579c911f07cb185e94cfffb384353325fc32a"
+      "path": "screenshots/04-panel-light-narrow.png",
+      "bytes": 60728,
+      "sha256": "9acf97f4e16ceca0f7bfae60e9a901d68ef8aa68d408bf4f1d281115bc44e6ee"
     },
     {
-      "path": "screenshots/05-permanent-delete-confirmation.png",
-      "bytes": 119426,
-      "sha256": "10728359543d5c0dd19fd2432808c03da9d4a53ff6dcc1fb72a70b5b5c3d8662"
+      "path": "screenshots/05-delete-undo.png",
+      "bytes": 151456,
+      "sha256": "3b2819272dc70453a948238f8095ebb903602c27c9300c16b3b3ff8814327b5d"
     },
     {
       "path": "START_HERE.md",
-      "bytes": 3067,
-      "sha256": "1079db08044bbf86296937b9982ca7978eaddb02636464c345f5fb03abb22a42"
+      "bytes": 2982,
+      "sha256": "3f552781c507d69741a1e369380bebd0bd41bb6eb24346f1d9f51994d12d3a3f"
     },
     {
       "path": "SUMMARY.md",
-      "bytes": 6920,
-      "sha256": "2daa84562aebadc675e47eac72fc732aab30bc27e8707cc05c51cb336000f28a"
+      "bytes": 2588,
+      "sha256": "50f6d4f39d68000ca5de85aebb834ba1c92876fb935899f89e1141cb1fd2dfd2"
     }
   ]
 }

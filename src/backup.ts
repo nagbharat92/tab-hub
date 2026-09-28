@@ -1,6 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { archivedCardKey, archivedGroupKey, cardKey, groupKey, guessKey, matchesStored, noteKey, pendingDeletionKey, persistRecordsAndConfirm, withDeletionLock } from "./library";
 import { addImportedMedia, getFragments, getImages, type FragmentRecord } from "./media";
+import { softDeletePrefix } from "./soft-delete";
 import type { ArchiveStates, CardArchiveState, GroupArchiveState, SavedCard, SavedGroup } from "./types";
 
 const MAX_BACKUP_BYTES = 500_000_000;
@@ -21,6 +22,7 @@ interface BackupManifest {
   notes: Record<string, string>;
   guesses: Record<string, { value: string; source: "model" | "user" }>;
   archives?: ArchiveStates;
+  hiddenPages?: string[];
   fragments: FragmentRecord[];
   images: ImageDescriptor[];
 }
@@ -58,7 +60,12 @@ function isFragmentRecord(value: unknown): value is FragmentRecord {
   return isRecord(value) && typeof value.cardId === "string" && Array.isArray(value.items) &&
     value.items.every((item: unknown) => isRecord(item) && typeof item.id === "string" &&
       item.cardId === value.cardId && (item.kind === "text" || item.kind === "region") &&
-      typeof item.text === "string" && typeof item.savedAt === "number" && Number.isFinite(item.savedAt));
+      typeof item.text === "string" && typeof item.savedAt === "number" && Number.isFinite(item.savedAt) &&
+      (item.anchor === undefined || item.kind === "region" && isRecord(item.anchor) &&
+        (item.anchor.selector === undefined || typeof item.anchor.selector === "string") &&
+        (item.anchor.text === undefined || typeof item.anchor.text === "string") &&
+        typeof item.anchor.scrollX === "number" && Number.isFinite(item.anchor.scrollX) &&
+        typeof item.anchor.scrollY === "number" && Number.isFinite(item.anchor.scrollY)));
 }
 
 function isImageDescriptor(value: unknown): value is ImageDescriptor {
@@ -93,6 +100,8 @@ function isBackupManifest(value: unknown): value is BackupManifest {
       isRecord(value.guesses) && Object.values(value.guesses).every(guess =>
         isRecord(guess) && typeof guess.value === "string" && (guess.source === "model" || guess.source === "user")) &&
       (value.archives === undefined || isArchives(value.archives)) &&
+      (value.hiddenPages === undefined || Array.isArray(value.hiddenPages) &&
+        value.hiddenPages.every((id: unknown) => typeof id === "string")) &&
       Array.isArray(value.fragments) && value.fragments.every(isFragmentRecord) &&
       Array.isArray(value.images) && value.images.every(isImageDescriptor);
 }
@@ -110,13 +119,17 @@ export function validateBackupManifest(value: unknown): BackupManifest {
       !unique(manifest.images.map(image => image.path))) {
     throw new Error("The backup contains duplicate identifiers.");
   }
+  const cardIds = new Set(manifest.cards.map(card => card.id));
   if (manifest.archives) {
-    const cardIds = new Set(manifest.cards.map(card => card.id));
     const groupIds = new Set(manifest.groups.map(group => group.id));
     if (Object.keys(manifest.archives.cards).some(id => !cardIds.has(id)) ||
         Object.keys(manifest.archives.groups).some(id => !groupIds.has(id))) {
       throw new Error("The backup contains archive records without their references.");
     }
+  }
+  if (manifest.hiddenPages && (!unique(manifest.hiddenPages) ||
+      manifest.hiddenPages.some(id => !cardIds.has(id)))) {
+    throw new Error("The backup contains hidden pages without their references.");
   }
   for (const card of manifest.cards) {
     try { new URL(card.url); } catch { throw new Error(`The backup contains an invalid link for card ${card.id}.`); }
@@ -134,6 +147,9 @@ export async function exportBackup(): Promise<{ file: Blob; filename: string; re
 async function snapshotBackup(): Promise<{ file: Blob; filename: string; result: BackupResult }> {
   const records = await chrome.storage.local.get(null);
   if (records[pendingDeletionKey]) throw new Error("A permanent deletion is still finishing. Retry cleanup before exporting a backup.");
+  if (Object.keys(records).some(key => key.startsWith(softDeletePrefix))) {
+    throw new Error("Wait for the deletion undo window to finish before exporting a backup.");
+  }
   const groups = Object.entries(records).filter(([key]) => key.startsWith("group:")).map(([, value]) => value as SavedGroup);
   const cards = Object.entries(records).filter(([key]) => key.startsWith("card:")).map(([, value]) => value as SavedCard);
   const notes = Object.fromEntries(Object.entries(records).filter(([key]) => key.startsWith("note:"))) as Record<string, string>;
@@ -149,7 +165,10 @@ async function snapshotBackup(): Promise<{ file: Blob; filename: string; result:
   }));
   const manifest: BackupManifest = {
     format: "tab-hub", version: 1, exportedAt: new Date().toISOString(),
-    groups, cards, notes, guesses, archives, fragments, images: descriptors
+    groups, cards, notes, guesses, archives,
+    hiddenPages: Object.keys(records).filter(key => key.startsWith("page:hidden:"))
+      .map(key => key.slice("page:hidden:".length)),
+    fragments, images: descriptors
   };
   const entries: Record<string, Uint8Array> = { "manifest.json": strToU8(JSON.stringify(manifest)) };
   for (const [index, { image }] of images.entries()) {
@@ -191,8 +210,12 @@ function mergeDeletedGroupMembers(current: SavedGroup, incoming: SavedGroup): Sa
 }
 
 async function restoreBackup(file: File): Promise<BackupResult> {
-  if ((await chrome.storage.local.get(pendingDeletionKey))[pendingDeletionKey]) {
+  const current = await chrome.storage.local.get(null);
+  if (current[pendingDeletionKey]) {
     throw new Error("A permanent deletion is still finishing. Retry cleanup before importing a backup.");
+  }
+  if (Object.keys(current).some(key => key.startsWith(softDeletePrefix))) {
+    throw new Error("Wait for the deletion undo window to finish before importing a backup.");
   }
   if (file.size > MAX_BACKUP_BYTES) throw new Error("This backup exceeds the 500 MB import limit.");
   let expandedBytes = 0;
@@ -222,6 +245,7 @@ async function restoreBackup(file: File): Promise<BackupResult> {
   }
   for (const [id, state] of Object.entries(manifest.archives?.cards ?? {})) records[archivedCardKey(id)] = state;
   for (const [id, state] of Object.entries(manifest.archives?.groups ?? {})) records[archivedGroupKey(id)] = state;
+  for (const id of manifest.hiddenPages ?? []) records[`page:hidden:${id}`] = true;
   const present = await chrome.storage.local.get(Object.keys(records));
   const additions = Object.fromEntries(Object.entries(records).filter(([key, value]) => {
     if (present[key] === undefined) return true;

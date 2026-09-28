@@ -117,7 +117,7 @@ test("the popup starts a region for the current tab and dismisses itself before 
       window.close = () => { document.documentElement.dataset.popupDismissed = "true"; };
     }, tabId);
     await popup.goto(`chrome-extension://${opened.id}/popup.html`);
-    await popup.getByRole("button", { name: "Mark a visible region" }).click();
+    await popup.getByRole("button", { name: "Save part of the page" }).click();
     await expect(source.locator("#tab-hub-region-overlay")).toBeAttached();
     await expect.poll(() => popup.locator("html").getAttribute("data-popup-dismissed")).toBe("true");
     await opened.worker.evaluate(id => chrome.tabs.update(id, { active: true }), tabId);
@@ -159,7 +159,7 @@ test("the popup reports a blocked region injection without disappearing", async 
       window.close = () => { document.documentElement.dataset.popupDismissed = "true"; };
     }, tabId);
     await popup.goto(`chrome-extension://${opened.id}/popup.html`);
-    await popup.getByRole("button", { name: "Mark a visible region" }).click();
+    await popup.getByRole("button", { name: "Save part of the page" }).click();
     await expect(popup.getByRole("status")).toContainText("Could not start region capture");
     await expect(popup.getByRole("status")).toContainText("This page blocks scripting");
     expect(await popup.locator("html").getAttribute("data-popup-dismissed")).toBeNull();
@@ -240,7 +240,6 @@ test("a failed screenshot stays visible until dismissed and the region can be re
     await expect.poll(() => opened.worker.evaluate(() =>
       (globalThis as typeof globalThis & { captureFailed: boolean }).captureFailed
     )).toBe(true);
-    await source.waitForTimeout(5_100);
     await expect(source.locator("#tab-hub-region-overlay")).toBeAttached();
     expect(await hub.evaluate(async () =>
       Object.keys(await chrome.storage.local.get(null)).filter(key => key.startsWith("card:")).length

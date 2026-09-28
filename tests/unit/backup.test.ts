@@ -33,4 +33,17 @@ describe("backup validation", () => {
     expect(() => validateBackupManifest({ ...valid(), cards: [{ ...valid().cards[0], url: "%%%" }] })).toThrow(/invalid link/);
     expect(() => validateBackupManifest({ ...valid(), images: [{ ...valid().images[0], path: "../leak.bin" }] })).toThrow(/unsafe/);
   });
+  it("roundtrips region anchors and rejects invalid anchors without breaking older fragments", () => {
+    const withAnchor = {
+      ...valid(),
+      fragments: [{ cardId: "c", items: [{
+        id: "f", cardId: "c", kind: "region", text: "", savedAt: 123,
+        anchor: { selector: "body > p:nth-of-type(1)", text: "Surrounding text", scrollX: 10, scrollY: 20 }
+      }] }]
+    };
+    expect(validateBackupManifest(withAnchor).fragments).toEqual(withAnchor.fragments);
+    expect(() => validateBackupManifest({
+      ...withAnchor, fragments: [{ cardId: "c", items: [{ ...withAnchor.fragments[0]!.items[0], anchor: { scrollX: NaN, scrollY: 1 } }] }]
+    })).toThrow(/not a supported/);
+  });
 });

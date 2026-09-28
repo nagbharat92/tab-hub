@@ -1,155 +1,245 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ArchiveRestore, BookOpen, Download, Layers3, Search, Trash2, Upload, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { HowThisWorks } from "@/components/how-this-works";
-import { ReferenceCard } from "@/components/reference-card";
+import { ArrowUpRight, Check, Download, Ellipsis, Filter, Search, Trash2, Upload } from "lucide-react";
+import { Toaster, toast } from "sonner";
+import { ThreadCard, ThreadFace } from "@/components/reference-card";
+import { restoreArchivedCards } from "@/src/archive";
 import { exportBackup, importBackup } from "@/src/backup";
-import { isCardArchived, restoreArchivedCards, restoreArchivedGroup } from "@/src/archive";
-import { deleteCollection, deleteReferences, hasPendingDeletion, resumePendingDeletion } from "@/src/delete";
+import { resumePendingDeletion } from "@/src/delete";
 import { chooseGuessProvider, noGuessProvider, type GuessProvider } from "@/src/guess";
-import { loadLibrary } from "@/src/library";
-import { getFragments, type FragmentRecord } from "@/src/media";
-import { searchCards } from "@/src/search";
-import type { ArchiveStates, SavedCard, SavedGroup } from "@/src/types";
+import { guessKey, updateGuess } from "@/src/library";
+import { openThreadSave } from "@/src/open-save";
+import { searchThreads } from "@/src/search";
+import {
+  pauseSoftDelete, pendingSoftDeletes, purgeExpiredSoftDeletes,
+  resumeSoftDelete, softDeleteSave, softDeleteThread, undoSoftDelete, type SoftDeleteJob
+} from "@/src/soft-delete";
+import { loadThreads, type SavedThread, type ThreadLibrary, type ThreadSave, type ThreadSaveKind } from "@/src/threads";
 import "@/assets/theme.css";
 import "./hub.css";
 
 const PAGE_SIZE = 48;
-
-interface PendingAction {
-  kind: "cards" | "group";
-  ids: string[];
-  expectedCardIds?: string[];
-  label: string;
-  mode: "delete" | "restore";
-  count: number;
-}
+const kinds: { kind: ThreadSaveKind; label: string }[] = [
+  { kind: "page", label: "Pages" }, { kind: "passage", label: "Passages" }, { kind: "region", label: "Regions" }
+];
+const queued = new Set<string>();
+let guessQueue: Promise<void> = Promise.resolve();
 
 function App() {
-  const [groups, setGroups] = useState<SavedGroup[]>([]);
-  const [cards, setCards] = useState<SavedCard[]>([]);
-  const [archives, setArchives] = useState<ArchiveStates>({ cards: {}, groups: {} });
-  const [fragments, setFragments] = useState<Map<string, FragmentRecord>>(new Map());
-  const [selected, setSelected] = useState("all");
+  const [library, setLibrary] = useState<ThreadLibrary>();
+  const [jobs, setJobs] = useState<SoftDeleteJob[]>([]);
+  const [groupFilter, setGroupFilter] = useState<string>();
+  const [kindFilter, setKindFilter] = useState<ThreadSaveKind>();
+  const [archivedView, setArchivedView] = useState(false);
   const [query, setQuery] = useState("");
-  const [visible, setVisible] = useState(PAGE_SIZE);
-  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<string>();
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [columnCount, setColumnCount] = useState(() => window.matchMedia("(max-width: 900px)").matches ? 2 : 4);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [error, setError] = useState("");
-  const [backupStatus, setBackupStatus] = useState("");
-  const [backupError, setBackupError] = useState("");
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
   const [backupBusy, setBackupBusy] = useState(false);
   const [provider, setProvider] = useState<GuessProvider>(noGuessProvider);
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
-  const [actionBusy, setActionBusy] = useState(false);
-  const [actionStatus, setActionStatus] = useState("");
-  const [actionError, setActionError] = useState("");
-  const [cleanupNeeded, setCleanupNeeded] = useState(false);
-  const sentinel = useRef<HTMLDivElement>(null);
   const archiveInput = useRef<HTMLInputElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const sentinel = useRef<HTMLDivElement>(null);
+  const displayedToasts = useRef(new Set<string>());
+  const mounted = useRef(true);
 
-  useEffect(() => {
-    let mounted = true;
-    void chooseGuessProvider().then(found => { if (mounted) setProvider(found); });
-    return () => { mounted = false; };
-  }, []);
-
-  useEffect(() => {
-    void resumePendingDeletion().then(() => setCleanupNeeded(false)).catch(cause => {
-      console.error("Tab Hub: permanent deletion needs cleanup.", cause);
-      setCleanupNeeded(true);
-      setActionError(`A previous deletion needs cleanup: ${String(cause)}. Retry cleanup below.`);
-    });
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-    async function refresh() {
-      try {
-        const library = await loadLibrary();
-        if (!mounted) return;
-        setGroups(library.groups);
-        setCards(library.cards);
-        setArchives(library.archives);
-        setError("");
-        try {
-          const savedFragments = await getFragments();
-          if (mounted) setFragments(new Map(savedFragments.map(fragment => [fragment.cardId, fragment])));
-        } catch (cause) {
-          if (mounted) setError(`References are available, but fragments could not be read: ${String(cause)}`);
-        }
-      } catch (cause) {
-        if (mounted) setError(`Local references could not be read: ${String(cause)}`);
-      } finally {
-        if (mounted) setLoading(false);
-      }
+  const refresh = useCallback(async () => {
+    try {
+      const [next, pending] = await Promise.all([loadThreads(), pendingSoftDeletes()]);
+      if (!mounted.current) return;
+      setLibrary(next);
+      setJobs(pending);
+    } catch (cause) {
+      if (mounted.current) setError(`Saved pages could not be read: ${String(cause)}`);
     }
-    void refresh();
-    const changed = (_changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+  }, []);
+
+  useEffect(() => {
+    mounted.current = true;
+    void (async () => {
+      try {
+        await resumePendingDeletion();
+        for (const job of await pendingSoftDeletes()) if (job.pausedRemaining !== undefined) await resumeSoftDelete(job.id);
+        await purgeExpiredSoftDeletes();
+        await refresh();
+      } catch (cause) { setError(`Deletion cleanup needs attention: ${String(cause)}`); }
+    })();
+    void chooseGuessProvider().then(found => { if (mounted.current) setProvider(found); });
+    const changed = (_: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area === "local") void refresh();
     };
     chrome.storage.onChanged.addListener(changed);
-    return () => { mounted = false; chrome.storage.onChanged.removeListener(changed); };
-  }, []);
+    return () => {
+      mounted.current = false;
+      chrome.storage.onChanged.removeListener(changed);
+    };
+  }, [refresh]);
 
-  useEffect(() => { setVisible(PAGE_SIZE); setSelectedIds([]); }, [query, selected]);
-  const groupById = useMemo(() => new Map(groups.map(group => [group.id, group])), [groups]);
-  const [activeCards, archivedCards] = useMemo(() => {
-    const active: SavedCard[] = [];
-    const archived: SavedCard[] = [];
-    for (const card of cards) (isCardArchived(card, archives) ? archived : active).push(card);
-    return [active, archived];
-  }, [cards, archives]);
+  const archived = library?.threads.some(thread => thread.archivedSaves.length) ?? false;
+  const groups = (library?.groups ?? []).filter(group => group.kind === "group" &&
+    library?.threads.some(thread => thread.visibleSaves.some(save => save.groupId === group.id)));
+  const currentThreads = useMemo(() => {
+    const all = library?.threads ?? [];
+    const scoped = archivedView ? all.filter(thread => thread.archivedSaves.length).map(thread => ({
+      ...thread, face: thread.archivedSaves[0]!, lastTouched: thread.archivedSaves[0]!.savedAt,
+      groupIds: [...new Set(thread.archivedSaves.map(save => save.groupId))]
+    })) : all.filter(thread => thread.visibleSaves.length);
+    return scoped.filter(thread =>
+      (!groupFilter || thread.groupIds.includes(groupFilter)) &&
+      (!kindFilter || thread.face.kind === kindFilter)
+    ).sort((a, b) => b.lastTouched - a.lastTouched || a.id.localeCompare(b.id));
+  }, [library, groupFilter, kindFilter, archivedView]);
+  const matching = useMemo(() => searchThreads(currentThreads, query, archivedView), [currentThreads, query, archivedView]);
+  const shown = matching.slice(0, visibleCount);
+  const selected = matching.find(thread => thread.id === selectedId);
+  const hasVisible = library?.threads.some(thread => thread.visibleSaves.length) ?? false;
+  const groupLabel = groups.find(group => group.id === groupFilter)?.name;
+  const kindLabel = kinds.find(item => item.kind === kindFilter)?.label;
+  const activeLabel = archivedView ? "Previously archived" : [groupLabel, kindLabel].filter(Boolean).join(" · ");
+
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [query, groupFilter, kindFilter, archivedView]);
   useEffect(() => {
-    if (!loading && selected === "archived" && archivedCards.length === 0) setSelected("all");
-  }, [archivedCards.length, loading, selected]);
-  const scoped = useMemo(() => selected === "archived" ? archivedCards : activeCards.filter(card =>
-    selected === "all" || selected === "loose" && groupById.get(card.groupId)?.kind === "single" || selected === card.groupId
-  ), [activeCards, archivedCards, selected, groupById]);
-  const matching = useMemo(() => searchCards(scoped, query, fragments), [scoped, query, fragments]);
-  const shown = matching.slice(0, visible);
-  const groupCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const card of activeCards) counts.set(card.groupId, (counts.get(card.groupId) ?? 0) + 1);
-    return counts;
-  }, [activeCards]);
-  const archivedGroupCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const card of archivedCards) counts.set(card.groupId, (counts.get(card.groupId) ?? 0) + 1);
-    return counts;
-  }, [archivedCards]);
-  const nativeGroups = groups.filter(group => group.kind === "group" && groupCounts.has(group.id));
-  const archivedGroups = groups.filter(group => group.kind === "group" && archivedGroupCounts.has(group.id));
-  const looseCount = activeCards.filter(card => groupById.get(card.groupId)?.kind === "single").length;
-  const selectedCount = selectedIds.filter(id => matching.some(card => card.id === id)).length;
-  useEffect(() => {
-    if (!loading && (selected === "loose" && looseCount === 0 ||
-        selected !== "all" && selected !== "loose" && selected !== "archived" && !groupCounts.has(selected))) {
-      setSelected("all");
+    if (selectedId && selected && window.matchMedia("(max-width: 900px)").matches) {
+      panelRef.current?.scrollIntoView({
+        block: "start",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
+      });
     }
-  }, [groupCounts, loading, looseCount, selected]);
-
+  }, [selectedId]);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 900px)");
+    const update = () => setColumnCount(media.matches ? 2 : 4);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    if (groupFilter && !groups.some(group => group.id === groupFilter)) setGroupFilter(undefined);
+    if (archivedView && !archived) setArchivedView(false);
+  }, [archived, groupFilter, groups, archivedView]);
   useEffect(() => {
     const node = sentinel.current;
-    if (!node || visible >= matching.length) return;
+    if (!node || visibleCount >= matching.length) return;
     const observer = new IntersectionObserver(entries => {
-      if (entries.some(entry => entry.isIntersecting)) setVisible(count => Math.min(count + PAGE_SIZE, matching.length));
-    }, { rootMargin: "400px" });
+      if (entries.some(entry => entry.isIntersecting)) setVisibleCount(count => Math.min(matching.length, count + PAGE_SIZE));
+    }, { rootMargin: "500px" });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [visible, matching.length]);
+  }, [visibleCount, matching.length]);
+
+  const undo = useCallback(async (id: string) => {
+    try {
+      if (!await undoSoftDelete(id)) {
+        await purgeExpiredSoftDeletes();
+        await refresh();
+        setError("This deletion can no longer be undone.");
+        return;
+      }
+      toast.dismiss(id);
+      displayedToasts.current.delete(id);
+      await refresh();
+    } catch (cause) { setError(`Undo failed: ${String(cause)}`); }
+  }, [refresh]);
+
+  useEffect(() => {
+    const active = new Set(jobs.map(job => job.id));
+    for (const id of displayedToasts.current) {
+      if (!active.has(id)) { toast.dismiss(id); displayedToasts.current.delete(id); }
+    }
+    for (const job of jobs) {
+      if (displayedToasts.current.has(job.id)) continue;
+      displayedToasts.current.add(job.id);
+      toast.custom(() => (
+        <div className="undo-toast" onMouseEnter={() => void pauseSoftDelete(job.id).then(refresh)}
+          onMouseLeave={() => void resumeSoftDelete(job.id).then(refresh)}>
+          <span>Deleted</span><span aria-hidden="true"> · </span>
+          <button type="button" onClick={() => void undo(job.id)}>Undo</button>
+        </div>
+      ), { id: job.id, duration: Infinity });
+    }
+    const timeouts = jobs.filter(job => job.pausedRemaining === undefined).map(job => setTimeout(() => {
+      void purgeExpiredSoftDeletes().then(refresh).catch(cause => setError(`Deletion cleanup needs attention: ${String(cause)}`));
+    }, Math.max(0, job.expiresAt - Date.now() + 20)));
+    return () => timeouts.forEach(clearTimeout);
+  }, [jobs, refresh, undo]);
+
+  useEffect(() => {
+    const closeMenus = (event: PointerEvent) => {
+      if (!filterRef.current?.contains(event.target as Node)) setFilterOpen(false);
+      if (!moreRef.current?.contains(event.target as Node)) setMoreOpen(false);
+    };
+    document.addEventListener("pointerdown", closeMenus);
+    return () => document.removeEventListener("pointerdown", closeMenus);
+  }, []);
+
+  const guessFor = useCallback((save: ThreadSave) => {
+    if (provider.name === "none" || save.guess || queued.has(save.cardId)) return;
+    const card = library?.cards.find(item => item.id === save.cardId);
+    if (!card) return;
+    queued.add(card.id);
+    guessQueue = guessQueue.then(async () => {
+      if ((await chrome.storage.local.get(guessKey(card.id)))[guessKey(card.id)]) return;
+      const fragment = library?.threads.find(thread => thread.saves.some(item => item.cardId === card.id))
+        ?.saves.find(item => item.cardId === card.id && item.kind === "passage")?.text;
+      const generated = await provider.generate({
+        title: card.title, site: card.site, description: card.description, note: card.note, fragment
+      });
+      if (generated) await updateGuess(card.id, generated, "model");
+    }).catch(cause => console.warn("Tab Hub: on-device guess unavailable; reference remains saved.", cause))
+      .finally(() => queued.delete(card.id));
+  }, [provider, library]);
+
+  async function remove(thread: SavedThread, save?: ThreadSave) {
+    try {
+      const job = save ? await softDeleteSave(thread, save) : await softDeleteThread(thread);
+      const leavesView = job.kind === "thread" || save &&
+        (archivedView ? thread.archivedSaves.length === 1 : thread.visibleSaves.length === 1);
+      if (leavesView && selectedId === thread.id) {
+        const index = matching.findIndex(item => item.id === thread.id);
+        setSelectedId(matching[index + 1]?.id ?? matching[index - 1]?.id);
+      }
+      await refresh();
+    } catch (cause) { setError(`Delete failed: ${String(cause)}`); }
+  }
+
+  async function removeSave(thread: SavedThread, save: ThreadSave) {
+    setLeaving(current => new Set(current).add(save.id));
+    await new Promise(resolve => setTimeout(resolve, 180));
+    try { await remove(thread, save); }
+    finally {
+      setLeaving(current => {
+        const next = new Set(current);
+        next.delete(save.id);
+        return next;
+      });
+    }
+  }
+
+  useEffect(() => {
+    const keyboard = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest("input, textarea, [contenteditable=true]")) return;
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+        const last = jobs.filter(job => job.pausedRemaining !== undefined || job.expiresAt > Date.now()).at(-1);
+        if (last) { event.preventDefault(); void undo(last.id); }
+      } else if ((event.key === "Delete" || event.key === "Backspace") && selected && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        void remove(selected);
+      }
+    };
+    document.addEventListener("keydown", keyboard);
+    return () => document.removeEventListener("keydown", keyboard);
+  }, [jobs, selected, matching, selectedId, undo]);
 
   async function downloadBackup() {
     setBackupBusy(true);
-    setBackupError("");
-    setBackupStatus("");
-    setActionStatus("");
     try {
-      const { file, filename, result } = await exportBackup();
+      const { file, filename } = await exportBackup();
       const url = URL.createObjectURL(file);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -158,12 +248,8 @@ function App() {
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      setBackupStatus(`Prepared a local backup of ${result.cards} ${result.cards === 1 ? "reference" : "references"} and ${result.fragments} marked pieces. Keep the downloaded file somewhere safe.`);
-    } catch (cause) {
-      setBackupError(`Backup export failed: ${String(cause)}`);
-    } finally {
-      setBackupBusy(false);
-    }
+    } catch (cause) { setError(`Backup export failed: ${String(cause)}`); }
+    finally { setBackupBusy(false); }
   }
 
   async function restoreBackup(event: React.ChangeEvent<HTMLInputElement>) {
@@ -171,202 +257,119 @@ function App() {
     const file = input.files?.[0];
     if (!file) return;
     setBackupBusy(true);
-    setBackupError("");
-    setBackupStatus("");
-    setActionStatus("");
-    try {
-      const result = await importBackup(file);
-      setBackupStatus(`Restored or verified ${result.cards} ${result.cards === 1 ? "reference" : "references"}, ${result.fragments} marked pieces and ${result.images} images.${result.alreadyPresent ? ` ${result.alreadyPresent} existing records were unchanged.` : ""}`);
-    } catch (cause) {
-      setBackupError(`Backup import failed: ${String(cause)}`);
-    } finally {
-      input.value = "";
-      setBackupBusy(false);
-    }
+    try { await importBackup(file); await refresh(); }
+    catch (cause) { setError(`Backup import failed: ${String(cause)}`); }
+    finally { input.value = ""; setBackupBusy(false); }
   }
 
-  function toggleCard(id: string) {
-    setSelectedIds(previous => previous.includes(id) ? previous.filter(item => item !== id) : [...previous, id]);
+  async function restore(thread: SavedThread) {
+    try {
+      await restoreArchivedCards([...new Set(thread.archivedSaves.map(save => save.cardId))]);
+      setArchivedView(false);
+      setSelectedId(undefined);
+      await refresh();
+    } catch (cause) { setError(`Restore failed: ${String(cause)}`); }
   }
 
-  async function retryCleanup() {
-    setActionBusy(true);
-    setActionError("");
-    try {
-      await resumePendingDeletion();
-      setCleanupNeeded(false);
-      setActionStatus("The previous permanent deletion finished.");
-    } catch (cause) {
-      setCleanupNeeded(true);
-      setActionError(`Cleanup still needs attention: ${String(cause)}`);
-    } finally {
-      setActionBusy(false);
-    }
-  }
-
-  async function applyAction() {
-    if (!pendingAction || actionBusy) return;
-    setActionBusy(true);
-    setActionError("");
-    setActionStatus("");
-    setBackupStatus("");
-    try {
-      if (pendingAction.mode === "delete") {
-        const deleted = pendingAction.kind === "group"
-          ? await deleteCollection(pendingAction.ids[0] ?? "", pendingAction.expectedCardIds ?? [])
-          : await deleteReferences(pendingAction.ids);
-        setActionStatus(`Permanently deleted ${deleted} ${deleted === 1 ? "reference" : "references"} from Tab Hub, including their stored notes and images.`);
-        if (pendingAction.kind === "group") setSelected("all");
-      } else {
-        if (pendingAction.kind === "group") await restoreArchivedGroup(pendingAction.ids[0] ?? "");
-        else await restoreArchivedCards(pendingAction.ids);
-        setActionStatus(`Restored ${pendingAction.count} ${pendingAction.count === 1 ? "reference" : "references"} to your library.`);
-        if (pendingAction.kind === "group") setSelected(pendingAction.ids[0] ?? "all");
-      }
-      setSelectedIds([]);
-      setSelectionMode(false);
-      setPendingAction(null);
-    } catch (cause) {
-      setActionError(`${pendingAction.mode === "delete" ? "Delete" : "Restore"} failed: ${String(cause)}`);
-      if (await hasPendingDeletion()) setCleanupNeeded(true);
-      setPendingAction(null);
-    } finally {
-      setActionBusy(false);
-    }
+  function changeFilters(group?: string, kind?: ThreadSaveKind, showArchived = false) {
+    setGroupFilter(group);
+    setKindFilter(kind);
+    setArchivedView(showArchived);
+    setSelectedId(undefined);
+    setFilterOpen(false);
+    setMoreOpen(false);
   }
 
   return (
     <main className="shell">
-      <header className="masthead">
-        <div className="brand"><BookOpen size={22} strokeWidth={1.7} /><span>Tab Hub</span></div>
+      <header className={`masthead ${activeLabel ? "has-filter" : ""}`}>
+        <span className="brand">Tab Hub</span>
         <div className="header-tools">
-          <span className="eyebrow">A home for what caught your eye</span>
-          <HowThisWorks />
-          <Button size="sm" variant="outline" disabled={backupBusy} aria-label="Export backup" onClick={() => void downloadBackup()}><Download size={15} /><span className="action-copy">Export</span></Button>
-          <Button size="sm" variant="outline" disabled={backupBusy} aria-label="Import backup" onClick={() => archiveInput.current?.click()}><Upload size={15} /><span className="action-copy">Import</span></Button>
-          <Input ref={archiveInput} type="file" accept=".tabhub,application/zip" className="sr-only" aria-label="Choose a Tab Hub backup" onChange={event => void restoreBackup(event)} />
+          {hasVisible && <>
+            <label className="search-field"><Search size={17} aria-hidden="true" />
+              <input aria-label="Search references" type="search" value={query}
+                onChange={event => { setQuery(event.target.value); setSelectedId(undefined); }} />
+            </label>
+            <div className="menu-wrap" ref={filterRef}>
+              <button className={`icon-button filter-trigger ${activeLabel ? "is-active" : ""}`} type="button"
+                aria-label="Filter" aria-haspopup="menu" aria-expanded={filterOpen}
+                onClick={() => { setFilterOpen(!filterOpen); setMoreOpen(false); }}><Filter size={19} /></button>
+              {filterOpen && <div className="menu filter-menu" role="menu" aria-label="Filter references"
+                onKeyDown={event => { if (event.key === "Escape") setFilterOpen(false); }}>
+                <button role="menuitemcheckbox" aria-checked={!groupFilter && !kindFilter && !archivedView}
+                  onClick={() => changeFilters()}><Check className={!groupFilter && !kindFilter && !archivedView ? "" : "invisible"} size={16} />All</button>
+                {groups.map(group => <button key={group.id} role="menuitemcheckbox" aria-checked={groupFilter === group.id}
+                  onClick={() => changeFilters(groupFilter === group.id ? undefined : group.id, kindFilter)}>
+                  <Check className={groupFilter === group.id ? "" : "invisible"} size={16} />{group.name}</button>)}
+                {archived && <button role="menuitemcheckbox" aria-checked={archivedView}
+                  onClick={() => changeFilters(undefined, undefined, true)}>
+                  <Check className={archivedView ? "" : "invisible"} size={16} />Previously archived</button>}
+                <span className="menu-separator" aria-hidden="true" />
+                {kinds.map(item => <button key={item.kind} role="menuitemcheckbox" aria-checked={kindFilter === item.kind}
+                  onClick={() => changeFilters(groupFilter, kindFilter === item.kind ? undefined : item.kind)}>
+                  <Check className={kindFilter === item.kind ? "" : "invisible"} size={16} />{item.label}</button>)}
+              </div>}
+            </div>
+            {activeLabel && <button className="filter-label" type="button" onClick={() => changeFilters()} aria-label={`Clear ${activeLabel}`}>
+              <span>{activeLabel}</span>
+            </button>}
+          </>}
+          <div className="menu-wrap" ref={moreRef}>
+            <button className="icon-button" type="button" aria-label="More" aria-haspopup="menu" aria-expanded={moreOpen}
+              onClick={() => { setMoreOpen(!moreOpen); setFilterOpen(false); }}><Ellipsis size={20} /></button>
+            {moreOpen && <div className="menu more-menu" role="menu" aria-label="More actions"
+              onKeyDown={event => { if (event.key === "Escape") setMoreOpen(false); }}>
+              <button role="menuitem" disabled={backupBusy} onClick={() => { setMoreOpen(false); void downloadBackup(); }}><Download size={16} />Export</button>
+              <button role="menuitem" disabled={backupBusy} onClick={() => { setMoreOpen(false); archiveInput.current?.click(); }}><Upload size={16} />Import</button>
+              {archived && !hasVisible && <button role="menuitem" onClick={() => changeFilters(undefined, undefined, true)}>Previously archived</button>}
+            </div>}
+          </div>
+          <input ref={archiveInput} type="file" accept=".tabhub,application/zip" className="sr-only"
+            aria-label="Choose a Tab Hub backup" onChange={event => void restoreBackup(event)} />
         </div>
       </header>
-      {backupStatus && <p className="backup-status" role="status">{backupStatus}</p>}
-      {backupError && <p className="library-error" role="alert">{backupError}</p>}
-      {actionStatus && <p className="backup-status" role="status">{actionStatus}</p>}
-      {actionError && <p className="library-error" role="alert">{actionError}</p>}
-      {cleanupNeeded && <Button size="sm" variant="outline" disabled={actionBusy} onClick={() => void retryCleanup()}>Retry deletion cleanup</Button>}
-      <section className={`intro ${cards.length ? "intro-compact" : ""}`}>
-        <p className="eyebrow">Your reference library</p>
-        {cards.length ? <h1>Your references<span className="title-stop">.</span></h1>
-          : <h1>Keep the thought.<br /><em>Close the tabs.</em></h1>}
-        <p>{cards.length ? `${activeCards.length} in your library${archivedCards.length ? ` · ${archivedCards.length} previously archived` : ""}.` : "Your groups and the pieces worth remembering will live here."}</p>
-      </section>
       {error && <p className="library-error" role="alert">{error}</p>}
-      {!loading && cards.length === 0 && !error
-        ? <section className="empty-state">
-            <BookOpen size={30} strokeWidth={1.3} />
-            <h2>Nothing tucked away yet.</h2>
-            <p>Save a tab or group from the Tab Hub button in your toolbar.</p>
+      {error.includes("cleanup") && <button type="button" className="cleanup-button" onClick={() =>
+        void resumePendingDeletion().then(purgeExpiredSoftDeletes).then(refresh).then(() => setError(""))
+          .catch(cause => setError(`Deletion cleanup needs attention: ${String(cause)}`))
+      }>Retry deletion cleanup</button>}
+      {!library ? null : !hasVisible && !archivedView
+        ? <p className="empty-state">Save a tab from the Tab Hub button in your toolbar.</p>
+        : <div className={`gallery-layout ${selected ? "has-selection" : ""}`}>
+          <section className="gallery-grid" aria-label="Saved pages">
+            {matching.length > 0 && <div className="masonry-grid">
+              {Array.from({ length: columnCount }, (_, column) => (
+                <div className="masonry-column" key={column}>{shown.filter((_, index) => index % columnCount === column).map((thread, index) =>
+                  <ThreadCard key={thread.id} thread={thread} index={index * columnCount + column} selected={selectedId === thread.id}
+                    onSelect={setSelectedId} onVisible={guessFor} />)}</div>
+              ))}
+            </div>}
+            <div ref={sentinel} className="gallery-sentinel" aria-hidden="true" />
           </section>
-        : <div className="library-layout">
-            <aside className="collections" aria-label="Collections">
-              <p className="eyebrow">Collections</p>
-              <Button variant="ghost" className={`collection ${selected === "all" ? "is-selected" : ""}`} onClick={() => setSelected("all")}>
-                <span className="collection-label"><Layers3 size={17} /> All references</span><span>{activeCards.length}</span>
-              </Button>
-              {nativeGroups.map(group => {
-                const count = groupCounts.get(group.id) ?? 0;
-                return <Button key={group.id} variant="ghost" className={`collection ${selected === group.id ? "is-selected" : ""}`} onClick={() => setSelected(group.id)}>
-                  <span className="collection-label"><span className="group-marker" data-color={group.color} /> <span className="collection-name">{group.name}</span></span><span>{count}</span>
-                </Button>;
-              })}
-              {looseCount > 0 && <Button variant="ghost" className={`collection ${selected === "loose" ? "is-selected" : ""}`} onClick={() => setSelected("loose")}>
-                <span className="collection-label"><span className="group-marker" data-color="grey" /> Individual tabs</span><span>{looseCount}</span>
-              </Button>}
-              <div className="collection-divider" />
-              {archivedCards.length > 0 && <Button variant="ghost" className={`collection ${selected === "archived" ? "is-selected" : ""}`} onClick={() => setSelected("archived")}>
-                <span className="collection-label"><ArchiveRestore size={17} /> Previously archived</span><span>{archivedCards.length}</span>
-              </Button>}
-              <div className="sidebar-note">The web, without the clutter.<br />Everything stays on this device.</div>
-            </aside>
-            <section className="library-main" aria-label="Saved references">
-              <div className="library-toolbar">
-                <div>
-                  <p className="eyebrow">{selected === "all" ? "Everything" : selected === "loose" ? "Individual tabs" : selected === "archived" ? "Saved before permanent deletion" : groupById.get(selected)?.name ?? "Collection"}</p>
-                  <h2>{query ? `${matching.length} ${matching.length === 1 ? "match" : "matches"}` : `${scoped.length} ${scoped.length === 1 ? "reference" : "references"}`}</h2>
-                </div>
-                <label className="search-field">
-                  <Search size={17} aria-hidden="true" />
-                  <Input value={query} onChange={event => setQuery(event.target.value)} placeholder={selected === "archived" ? "Search previously archived" : "Search everything"} aria-label="Search references" />
-                  {query && <Button size="icon" variant="ghost" aria-label="Clear search" onClick={() => setQuery("")}><X size={16} /></Button>}
-                </label>
-              </div>
-              {selected === "archived" && <p className="legacy-note">These references were archived in an earlier version. Nothing here will be deleted automatically. Restore them or permanently delete them when you choose.</p>}
-              {selected === "archived" && archivedGroups.length > 0 && <div className="archived-group-list" aria-label="Previously archived collections">
-                {archivedGroups.map(group => <div className="archived-group" key={group.id}>
-                  <span><span className="group-marker" data-color={group.color} /> {group.name} · {archivedGroupCounts.get(group.id)} references</span>
-                  <div className="legacy-actions">
-                  {archives.groups[group.id]?.archivedAt != null && <Button size="sm" variant="outline" disabled={actionBusy} aria-label={`Restore collection ${group.name}`} onClick={() =>
-                    setPendingAction({ kind: "group", ids: [group.id], mode: "restore", label: group.name,
-                      count: archivedCards.filter(card => card.groupId === group.id && archives.cards[card.id]?.archivedAt == null).length })
-                  }><ArchiveRestore size={15} /> Restore collection</Button>}
-                  <Button size="sm" variant="outline" disabled={actionBusy || cleanupNeeded} aria-label={`Delete collection ${group.name}`} onClick={() =>
-                    setPendingAction({ kind: "group", ids: [group.id], mode: "delete", label: group.name,
-                      expectedCardIds: cards.filter(card => card.groupId === group.id).map(card => card.id),
-                      count: cards.filter(card => card.groupId === group.id).length })
-                  }><Trash2 size={15} /> Delete collection</Button>
-                  </div>
-                </div>)}
-              </div>}
-              {selected !== "archived" && scoped.length > 0 && groupById.get(selected)?.kind === "group" && <div className="collection-tools">
-                <Button size="sm" variant="outline" disabled={actionBusy || cleanupNeeded} onClick={() =>
-                  setPendingAction({ kind: "group", ids: [selected], mode: "delete", label: groupById.get(selected)?.name ?? "this collection",
-                    expectedCardIds: cards.filter(card => card.groupId === selected).map(card => card.id),
-                    count: cards.filter(card => card.groupId === selected).length })
-                }><Trash2 size={15} /> Delete collection</Button>
-              </div>}
-              {scoped.length > 0 && <div className="selection-toolbar">
-                <Button size="sm" variant="ghost" onClick={() => { setSelectionMode(value => !value); setSelectedIds([]); }}>
-                  {selectionMode ? "Cancel selection" : "Select references"}
-                </Button>
-                {selectionMode && <>
-                  <Button size="sm" variant="ghost" onClick={() => setSelectedIds(matching.map(card => card.id))}>Select all matches</Button>
-                  <span>{selectedCount} selected</span>
-                  <Button size="sm" disabled={!selectedCount || actionBusy || cleanupNeeded} onClick={() =>
-                    setPendingAction({ kind: "cards", ids: selectedIds.filter(id => matching.some(card => card.id === id)), mode: "delete",
-                      label: `${selectedCount} selected references`, count: selectedCount })
-                  }>Delete selected permanently</Button>
-                  {selected === "archived" && <Button size="sm" variant="outline" disabled={!selectedCount || actionBusy} onClick={() =>
-                    setPendingAction({ kind: "cards", ids: selectedIds.filter(id => matching.some(card => card.id === id)), mode: "restore",
-                      label: `${selectedCount} selected references`, count: selectedCount })
-                  }>Restore selected</Button>}
-                </>}
-              </div>}
-              {matching.length
-                ? <><div className="card-grid">{shown.map(card =>
-                    <ReferenceCard key={card.id} card={card} group={groupById.get(card.groupId)} fragments={fragments.get(card.id)} provider={provider}
-                      archived={selected === "archived"} selectionMode={selectionMode} selected={selectedIds.includes(card.id)} onToggleSelect={toggleCard}
-                      onDelete={item => setPendingAction({ kind: "cards", ids: [item.id], mode: "delete", label: item.title, count: 1 })}
-                      onRestore={item => setPendingAction({ kind: "cards", ids: [item.id], mode: "restore", label: item.title, count: 1 })} />)}
-                  </div><div ref={sentinel} className="load-status" aria-live="polite">{visible < matching.length ? `Showing ${shown.length} of ${matching.length} references` : ""}</div></>
-                : <div className="no-results"><Search size={28} /><h3>{query ? "No references found" : selected === "archived" ? "No previously archived references" : "No references here"}</h3>
-                  <p>{query ? "Try another word or choose a different collection." : selected === "archived" ? "Nothing remains here; new removals permanently delete rather than archive." : "Save a reference to see it here."}</p></div>}
-            </section>
-          </div>}
-      <Dialog open={pendingAction !== null} onOpenChange={open => { if (!open && !actionBusy) setPendingAction(null); }}>
-        <DialogContent className="archive-dialog">
-          <DialogHeader>
-            <DialogTitle>{pendingAction?.mode === "delete" ? "Permanently delete" : "Restore"} {pendingAction?.label}?</DialogTitle>
-            <DialogDescription>
-              {pendingAction?.mode === "delete"
-                ? `This cannot be undone in Tab Hub. ${pendingAction.kind === "group" ? "Every saved reference in this collection, including previously archived ones, " : "The selected references " }will lose their links, notes, guesses, marked pieces and locally stored images. Previously exported backup files are not affected.`
-                : "This brings the previously archived reference back to your library. Nothing is deleted."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="archive-dialog-actions">
-            <Button variant="outline" disabled={actionBusy} onClick={() => setPendingAction(null)}>Cancel</Button>
-            <Button variant={pendingAction?.mode === "delete" ? "destructive" : "default"} disabled={actionBusy || pendingAction?.mode === "delete" && cleanupNeeded}
-              onClick={() => void applyAction()}>{actionBusy ? "Working…" : pendingAction?.mode === "delete" ? "Delete permanently" : "Restore"}</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+          {selected && <aside ref={panelRef} className="thread-panel" aria-label={`Saves for ${selected.face.title}`}>
+            <div className="panel-header">
+              <button type="button" className="panel-open" onClick={() =>
+                void openThreadSave({ ...selected.face, kind: "page", anchor: undefined })}>
+                <img src={chrome.runtime.getURL(`/_favicon/?pageUrl=${encodeURIComponent(selected.face.url)}&size=32`)} alt="" />
+                <span>{selected.face.title}</span><ArrowUpRight size={17} aria-hidden="true" />
+              </button>
+              <button type="button" className="icon-button panel-delete" aria-label={`Delete page ${selected.face.title}`}
+                onClick={() => void remove(selected)}><Trash2 size={17} /></button>
+            </div>
+            {archivedView && <button className="restore-button" type="button" onClick={() => void restore(selected)}>Restore</button>}
+            <div className="panel-saves">{(archivedView ? selected.archivedSaves : selected.visibleSaves).map(save =>
+              <div className={`panel-save ${leaving.has(save.id) ? "is-leaving" : ""}`} key={save.id}>
+                <div role="button" tabIndex={0} className="panel-save-open"
+                  aria-label={`Open save from ${save.title}`} onClick={() => void openThreadSave(save)}
+                  onKeyDown={event => {
+                    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void openThreadSave(save); }
+                  }}><ThreadFace save={save} panel /></div>
+                <button type="button" className="panel-save-delete" aria-label={`Delete save ${save.id}`}
+                  disabled={leaving.has(save.id)} onClick={() => void removeSave(selected, save)}><Trash2 size={15} /></button>
+              </div>)}</div>
+          </aside>}
+        </div>}
+      <Toaster position="bottom-center" expand={false} visibleToasts={6} gap={7} />
     </main>
   );
 }

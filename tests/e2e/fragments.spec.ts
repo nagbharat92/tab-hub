@@ -3,7 +3,7 @@ import { createGroup, launch, newProfile, removeProfile } from "./helpers";
 import { startFixtureServer } from "../fixtures/pages";
 
 async function fragmentState(page: import("@playwright/test").Page, cardId: string) {
-  return page.evaluate(async id => new Promise<{ items: { id: string; kind: string; text: string }[]; images: number[] }>((resolve, reject) => {
+  return page.evaluate(async id => new Promise<{ items: { id: string; kind: string; text: string; anchor?: { selector?: string; scrollX: number; scrollY: number } }[]; images: number[] }>((resolve, reject) => {
     const open = indexedDB.open("tab-hub-media", 1);
     open.onerror = () => reject(open.error);
     open.onsuccess = () => {
@@ -11,7 +11,7 @@ async function fragmentState(page: import("@playwright/test").Page, cardId: stri
       const transaction = database.transaction(["fragments", "images"], "readonly");
       const fragment = transaction.objectStore("fragments").get(id);
       fragment.onsuccess = () => {
-        const items = (fragment.result?.items ?? []) as { id: string; kind: string; text: string }[];
+        const items = (fragment.result?.items ?? []) as { id: string; kind: string; text: string; anchor?: { selector?: string; scrollX: number; scrollY: number } }[];
         const sizes: number[] = [];
         if (!items.length) { database.close(); resolve({ items, images: sizes }); return; }
         for (const item of items) {
@@ -59,16 +59,16 @@ test("selected passages and a dragged region appear on the matching saved card",
     });
     const marked = await hub.evaluate(({ tabId, text }) => chrome.runtime.sendMessage({ type: "mark-text", tabId, selectedText: text }), { tabId: sourceTab.id, text: selected });
     expect(marked).toMatchObject({ ok: true, result: { cardId: card.id, createdCard: false, kind: "text" } });
-    await expect(hub.getByTestId("reference-card").locator("blockquote")).toContainText("small fragment worth remembering");
-    await hub.getByRole("textbox", { name: "Search references" }).fill("small fragment");
+    await expect(hub.getByTestId("reference-card").locator("span.face-passage")).toContainText("small fragment worth remembering");
+    await hub.getByRole("searchbox", { name: "Search references" }).fill("small fragment");
     await expect(hub.getByTestId("reference-card")).toHaveCount(1);
-    await hub.getByRole("button", { name: "Clear search" }).click();
+    await hub.getByRole("searchbox", { name: "Search references" }).fill("");
 
     const second = await hub.evaluate(({ tabId, text }) => chrome.runtime.sendMessage({ type: "mark-text", tabId, selectedText: text }), { tabId: sourceTab.id, text: "A second selected passage" });
     expect(second).toMatchObject({ ok: true, result: { cardId: card.id } });
-    await hub.getByRole("textbox", { name: "Search references" }).fill("small fragment");
+    await hub.getByRole("searchbox", { name: "Search references" }).fill("small fragment");
     await expect(hub.getByTestId("reference-card")).toHaveCount(1);
-    await hub.getByRole("button", { name: "Clear search" }).click();
+    await hub.getByRole("searchbox", { name: "Search references" }).fill("");
 
     expect(await hub.evaluate(id => chrome.runtime.sendMessage({ type: "start-region", tabId: id }), sourceTab.id)).toMatchObject({ ok: true });
     await expect(source.locator("#tab-hub-region-overlay")).toBeAttached();
@@ -79,6 +79,7 @@ test("selected passages and a dragged region appear on the matching saved card",
     await expect.poll(async () => (await fragmentState(hub, card.id)).items.length).toBe(3);
     const stored = await fragmentState(hub, card.id);
     expect(stored.items.map(item => item.kind)).toEqual(["text", "text", "region"]);
+    expect(stored.items[2]?.anchor).toMatchObject({ selector: expect.any(String), scrollX: 0, scrollY: 0 });
     expect(stored.images[2]).toBeGreaterThan(500);
     await expect(hub.getByRole("img", { name: "Marked region from A page with no preview" })).toBeVisible();
   } finally {

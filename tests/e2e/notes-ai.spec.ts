@@ -2,7 +2,7 @@ import { test, expect, type BrowserContext } from "@playwright/test";
 import { createGroup, launch, newProfile, removeProfile } from "./helpers";
 import { startFixtureServer } from "../fixtures/pages";
 
-test("notes are editable, searchable and durable; absent on-device AI adds no guess", async () => {
+test("retained notes stay searchable and durable without an editing UI; absent AI adds no guess", async () => {
   const fixture = await startFixtureServer();
   const profile = await newProfile();
   let context: BrowserContext | undefined;
@@ -14,22 +14,14 @@ test("notes are editable, searchable and durable; absent on-device AI adds no gu
     await hub.goto(`chrome-extension://${opened.id}/hub.html`);
     expect(await hub.evaluate(id => chrome.runtime.sendMessage({ type: "capture-group", groupId: id }), groupId)).toMatchObject({ ok: true });
     await expect(hub.getByTestId("reference-card")).toHaveCount(1);
-    await expect(hub.locator(".card-guess")).toHaveCount(0);
-    await hub.getByRole("button", { name: "Edit A page with no preview" }).click();
-    const note = hub.locator('textarea[id^="note-"]');
-    await note.fill("A quiet layout reference for the sketchbook");
-    await hub.keyboard.press("Escape");
-    await expect(hub.getByRole("alert")).toContainText("Save your changes or explicitly discard");
-    await hub.getByRole("button", { name: "Discard edits" }).click();
-    await expect(hub.locator(".card-note")).toHaveCount(0);
-
-    await hub.getByRole("button", { name: "Edit A page with no preview" }).click();
-    await hub.locator('textarea[id^="note-"]').fill("A quiet layout reference for the sketchbook");
-    await hub.getByRole("button", { name: "Save changes" }).click();
-    await expect(hub.getByRole("status")).toContainText("Saved on this device");
-    await hub.getByRole("button", { name: "Done" }).click();
-    await expect(hub.locator(".card-note")).toContainText("quiet layout reference");
-    await hub.getByRole("textbox", { name: "Search references" }).fill("sketchbook");
+    const cardId = await hub.evaluate(async () => Object.values(await chrome.storage.local.get(null))
+      .find(item => item?.url?.endsWith("/no-preview"))?.id as string);
+    expect(cardId).toBeTruthy();
+    expect(await hub.evaluate(async id => (await chrome.storage.local.get(`guess:${id}`))[`guess:${id}`], cardId)).toBeUndefined();
+    await hub.evaluate(id => chrome.storage.local.set({ [`note:${id}`]: "A quiet layout reference for the sketchbook" }), cardId);
+    await expect(hub.locator(".card-note, textarea")).toHaveCount(0);
+    await expect(hub.getByRole("button", { name: "Edit A page with no preview" })).toHaveCount(0);
+    await hub.getByRole("searchbox", { name: "Search references" }).fill("sketchbook");
     await expect(hub.getByTestId("reference-card")).toHaveCount(1);
 
     await context.close();
@@ -38,7 +30,9 @@ test("notes are editable, searchable and durable; absent on-device AI adds no gu
     context = restarted.context;
     const reopened = await context.newPage();
     await reopened.goto(`chrome-extension://${restarted.id}/hub.html`);
-    await reopened.getByRole("textbox", { name: "Search references" }).fill("sketchbook");
+    expect(await reopened.evaluate(async id => (await chrome.storage.local.get(`note:${id}`))[`note:${id}`], cardId))
+      .toBe("A quiet layout reference for the sketchbook");
+    await reopened.getByRole("searchbox", { name: "Search references" }).fill("sketchbook");
     await expect(reopened.getByTestId("reference-card")).toHaveCount(1);
     await expect(reopened.locator(".card-guess")).toHaveCount(0);
   } finally {
@@ -48,7 +42,7 @@ test("notes are editable, searchable and durable; absent on-device AI adds no gu
   }
 });
 
-test("an available on-device provider generates a guess that the user can correct", async () => {
+test("an on-device guess persists and a retained user correction remains searchable but hidden", async () => {
   const fixture = await startFixtureServer();
   const profile = await newProfile();
   let context: BrowserContext | undefined;
@@ -71,16 +65,24 @@ test("an available on-device provider generates a guess that the user can correc
     });
     await hub.goto(`chrome-extension://${opened.id}/hub.html`);
     expect(await hub.evaluate(id => chrome.runtime.sendMessage({ type: "capture-group", groupId: id }), groupId)).toMatchObject({ ok: true });
-    await expect(hub.locator(".card-guess")).toContainText("A considered typographic gesture.");
-    await hub.getByRole("button", { name: "Edit A page with no preview" }).click();
-    await hub.locator('textarea[id^="guess-"]').fill("The spacing is the reference.");
-    await hub.getByRole("button", { name: "Save changes" }).click();
-    await hub.getByRole("button", { name: "Done" }).click();
+    const cardId = await hub.evaluate(async () => Object.values(await chrome.storage.local.get(null))
+      .find(item => item?.url?.endsWith("/no-preview"))?.id as string);
+    await expect.poll(() => hub.evaluate(async id =>
+      (await chrome.storage.local.get(`guess:${id}`))[`guess:${id}`], cardId))
+      .toEqual({ value: "A considered typographic gesture.", source: "model" });
+    await hub.getByRole("searchbox", { name: "Search references" }).fill("typographic gesture");
+    await expect(hub.getByTestId("reference-card")).toHaveCount(1);
+    await hub.evaluate(id => chrome.storage.local.set({
+      [`guess:${id}`]: { value: "The spacing is the reference.", source: "user" }
+    }), cardId);
     await hub.reload();
-    await expect(hub.locator(".card-guess")).toContainText("The spacing is the reference.");
-    await expect(hub.locator(".card-guess")).not.toContainText("A considered typographic gesture.");
-    const userGuess = await hub.evaluate(async () => Object.entries(await chrome.storage.local.get(null)).find(([key]) => key.startsWith("guess:"))?.[1]);
+    await expect(hub.locator(".card-guess, textarea")).toHaveCount(0);
+    const userGuess = await hub.evaluate(async id => (await chrome.storage.local.get(`guess:${id}`))[`guess:${id}`], cardId);
     expect(userGuess).toEqual({ value: "The spacing is the reference.", source: "user" });
+    await hub.getByRole("searchbox", { name: "Search references" }).fill("spacing is the reference");
+    await expect(hub.getByTestId("reference-card")).toHaveCount(1);
+    await hub.getByRole("searchbox", { name: "Search references" }).fill("typographic gesture");
+    await expect(hub.getByTestId("reference-card")).toHaveCount(0);
   } finally {
     await context?.close();
     await removeProfile(profile);

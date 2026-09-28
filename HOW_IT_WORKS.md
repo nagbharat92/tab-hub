@@ -1,140 +1,35 @@
 # How Tab Hub works
 
-Tab Hub turns tab groups and individual tabs into a visual reference library. It helps you close tabs without losing the pages—or the exact details—that made them worth keeping.
+Tab Hub saves reference tabs deliberately; it does not collect or close every open group automatically. Everything is stored in this browser profile, without an account, server, hosted AI or sync.
 
-> **Important:** Tab Hub does not automatically copy every open tab group. You choose which group or tab to save. This prevents it from unexpectedly collecting or closing anything.
+## Save from the toolbar
 
-## What you are looking at
+Open the popup while viewing a page. When the tab belongs to a group, **Save [group name] · [number] tabs** saves every tab in that group. **Save this tab** saves only the current one. Tab Hub writes and reads back every record, then closes only tabs that still match what it saved; failures and tabs that navigate during capture stay open. The hub opens or reuses its existing tab.
 
-### The header
+Select text first to enable **Save the text you selected**. Choose **Save part of the page** to drag a visible rectangle; the popup closes before the drag. Press Esc to cancel. A failed crop stays on the page with its error until dismissed. Marking a fragment does not close its source tab, and an unsaved page gains a new reference. The context menu also offers these actions. Protected browser pages can be saved as links, but cannot be marked or inspected.
 
-- **How this works** opens this guide.
-- **Copy formatted text** copies this guide with headings, emphasis and lists intact.
-- **Export** downloads a complete private backup of your references.
-- **Import** restores a Tab Hub backup without overwriting conflicting local edits.
+The popup displays available Chrome shortcuts beside actions. Chrome supplies four default extension-command slots; region capture remains in the popup and context menu. Browser-specific restrictions or user-remapped bindings may change the shortcuts displayed.
 
-### Collections
+## Find the page and its saved pieces
 
-The left side of the hub lists your saved browser groups. Each collection keeps the group's original name and colour.
+The hub has a quiet search field, a **Filter** menu and **More** for Export/Import. It shows one card for each page after removing its URL hash and common sharing/tracking parameters. Cards sort by their newest visible save. A page save shows domain, time, title and a local image when available; a passage uses serif text; a region uses its captured image. Multiple saves for the same page form a stack. An imageless page stays a shorter title card rather than an empty image box.
 
-- **All references** shows everything.
-- Selecting a collection shows only that group's cards.
-- **Individual tabs** holds pages that were saved outside a group.
-- **Previously archived** appears only if you archived references in an earlier version. You can restore or permanently delete them; the upgrade does not remove them.
+Filter by a named browser group, save type, or both. Ungrouped saves appear under All, without a pseudo-collection. A **Previously archived** filter appears when records archived by an older version are present; upgrading does not erase them. Search spans the current visible filter and matches title, site, URL, note, interpretation and saved passage text. Notes and model/user interpretations remain saved and searchable, but are not displayed or editable in this structural-design round.
 
-On a narrow window, collections become a horizontal row you can scroll.
+Select a card to see its saves newest first in the panel. On a narrow window, the panel follows the unchanged grid in the page instead of covering it. The panel's top row opens the original page; its delete button removes the whole page. Each save opens its own place on the source:
 
-### Reference cards
+- A passage uses Chrome's native `#:~:text=` highlight.
+- A region saved with an anchor scrolls to the matching element and briefly outlines it. Legacy regions without anchors, changed pages and restricted pages simply open at the top.
+- A whole-page save opens at the top.
 
-Each card represents one saved tab. A card can show:
+## Delete and undo
 
-- the page title, website and date saved
-- the browser group it came from
-- a marked passage or cropped visual region
-- your own note
-- an optional guess about why the page may have mattered
+The panel's small save-level delete removes only that save. Its header delete, or Delete/Backspace while a card is selected, removes the whole page, including underlying legacy archived saves at that URL. A **Deleted · Undo** toast appears for each deletion for five seconds; hover pauses its timer. Cmd+Z (Ctrl+Z elsewhere) restores the most recent pending deletion. After expiry, metadata and relevant local images/fragments are purged. The next card becomes selected after a page leaves a populated grid, so repeated Delete presses work.
 
-Click the card image—or **Details**—to see and edit everything attached to that reference. Use the arrow button to open the original page.
+Deleting the last visible save does **not** silently remove older archived records at the same URL. Deleting the last save from a source card removes that source card; failed cleanup keeps its deletion intent so the next launch can retry. If the hub displays **Retry deletion cleanup**, use it before continuing. A downloaded backup made before deletion still contains the old data.
 
-## Permanently delete a saved reference
+## Back up and privacy
 
-Choose **Delete** on a card, or select several cards and choose **Delete selected permanently**. To remove a whole saved browser group, choose that collection and click **Delete collection**. **Select all matches** includes cards beyond the first screen.
+Use **More → Export** to download a `.tabhub` archive containing saved URLs and groups, notes and guesses, archive state, fragments and image bytes. Treat it as private browsing data: the file is not encrypted. **More → Import** restores a compatible backup and rejects conflicting local edits rather than overwriting them. Wait until any undo window or pending cleanup finishes before exporting or importing.
 
-Tab Hub asks for confirmation before deleting. This **cannot be undone inside Tab Hub**: its copy of each link, note, guess, marked piece and local image is permanently removed. A collection deletion also includes any of its cards that were previously archived. It does **not** delete the source website, your browser history or a `.tabhub` backup file you downloaded earlier.
-
-### References archived in an earlier version
-
-Older archived references are **not** automatically deleted on upgrade. Choose **Previously archived** to find them. You can **Restore** a card or collection, delete one, select several to delete, or delete a collection including its hidden cards. When all old archived references are gone, this section disappears.
-
-If deletion fails partway through, Tab Hub keeps the confirmed deletion pending and provides **Retry deletion cleanup**. Do not import or export a backup until that cleanup finishes.
-
-## Save a tab group
-
-1. Go to any tab inside the browser tab group you want to save.
-2. Click the Tab Hub extension in the browser toolbar.
-3. Choose **Save "[group name]"**.
-4. Tab Hub saves every tab, checks that every record can be read back, and opens the hub.
-5. Only after that check succeeds does it close the original tabs.
-
-If saving fails, or if a tab changes while saving, that tab stays open. Tab Hub itself is never treated as a reference.
-
-If the active page is already Tab Hub, the popup only shows **Open your hub**. Switch to a tab inside the group before opening the popup.
-
-## Save one tab
-
-Open the extension while viewing the page and choose **Save this tab**. It becomes a card under **Individual tabs** and closes only after the save is verified.
-
-You can also right-click a page and choose **Save this tab to Tab Hub**.
-
-## Save the exact thing that matters
-
-Saving a fragment does not close the page.
-
-### Mark a passage
-
-1. Select text on the page.
-2. Right-click the selection.
-3. Choose **Save selected passage to Tab Hub**.
-
-You can also select text and choose **Mark selected text** in the extension popup.
-
-The passage appears on the matching **visible** card and becomes searchable. If the page was never saved—or only a previously archived copy exists—Tab Hub creates a new individual card in the main library rather than hiding your new fragment.
-
-### Mark a visual region
-
-1. Open the extension and choose **Mark a visible region**, or right-click the page and choose the same action.
-2. Drag a rectangle around the visible part you want to remember.
-3. Release to save the crop.
-
-The extension popup closes so you can drag directly on the page. Press **Esc** to cancel. Only the visible part of the current page can be cropped. Wait for a crop to finish before starting another; switching tabs during capture cancels it rather than saving the wrong page. If a capture fails, its error stays visible until you dismiss it; choose **Mark a visible region** again to retry. Some browser-protected pages do not allow the selector to open.
-
-## Add notes and correct the guess
-
-Open **Details** on any card.
-
-- **Your note** is for your own words. It is optional and searchable.
-- **Why you might have saved this** appears only when Chrome's on-device model is available. It is a tentative guess, not a fact.
-- You can edit the guess. Once you do, Tab Hub will not replace your wording with another automatic guess.
-
-Unsaved edits must be saved or explicitly discarded before the details window closes.
-
-## Find something again
-
-Use **Search everything** above the cards. Search looks through:
-
-- page titles
-- website names and URLs
-- your notes
-- saved passage text
-
-Search works across the current view: all visible references, one selected collection, or **Previously archived** if that legacy section exists.
-
-## How card visuals are chosen
-
-Tab Hub tries these in order:
-
-1. your newest marked visual region or passage crop
-2. a screenshot of the active tab, when Chrome permits one
-3. the page's own preview image, copied into local storage
-4. a designed text cover when no image is available
-
-A missing or broken image never prevents the link from being saved.
-
-## Keep a backup
-
-Everything lives in this browser profile, so use **Export** occasionally.
-
-The downloaded `.tabhub` file includes current links, groups, notes, guesses, marked passages, stored images and any remaining legacy archive state. Keep it somewhere private: it contains part of your browsing history and is not encrypted.
-
-Use **Import** to restore it. Tab Hub verifies identical existing records and refuses to overwrite a conflicting local edit. Backups made before archive existed still import normally. A backup saved before you permanently deleted a card still contains that earlier copy; importing it is an explicit way to recover it.
-
-## Privacy and limits
-
-- There is no account, server or cross-device sync.
-- Nothing is deleted automatically or after a timer; only your confirmed **Delete permanently** action removes local data.
-- Page data is not sent to a hosted AI service.
-- The copy button writes this guide only when you click it; Tab Hub does not read your clipboard.
-- The optional guess uses Chrome's built-in on-device model only when it is already available.
-- Removing the extension or deleting its browser profile can remove its local data, so keep an exported backup.
-- Chrome's own internal pages can be saved as links, but they may not allow screenshots or fragment capture.
-- Local `file://` pages may require **Allow access to file URLs** in the extension's Chrome settings.
+Chrome's own profile/extension removal can erase local data; keep a private backup elsewhere. The in-memory backup limit is 500 MB. Page-owned preview images are cached locally without cookies or referrer and are never loaded remotely by the hub. On-device model guesses are optional and generated only if Chrome reports an existing local model; without it, saving and searching still work. `file://` pages may require Chrome's **Allow access to file URLs** setting for marking.

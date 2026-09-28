@@ -1,44 +1,26 @@
 # Tab Hub: delivery summary
 
-Tab Hub 0.3.0 is a locally stored Manifest V3 Chromium extension. WXT bundles a React/TypeScript/Tailwind/shadcn/ui popup, background worker and light/dark hub with no server, account, remote code or CDN.
+`main` ships **Tab Hub 0.3.0**, a local-only Manifest V3 Chromium extension (WXT, React, TypeScript, Tailwind, shadcn/ui; no server, account, remote code or CDN). The unmerged `round-2` branch contains the **0.4.0 structural redesign** built from the v0.2 design brief; its full handoff starts at [`process/round-2/SUMMARY.md`](process/round-2/SUMMARY.md).
 
-## Install and use
+## Round 2 (0.4.0, review branch)
 
-1. Run `npm ci` and `npm run build` in this repository.
-2. Open `chrome://extensions` in Chrome or a Chromium browser, enable **Developer mode**, choose **Load unpacked**, and select `.output/chrome-mv3`. Pin the extension for quick access.
-3. Open the popup while viewing a tab in a browser group and choose **Save “group name”**, or choose **Save this tab**. The original tabs close only after every URL and its group record have been written and read back. The hub opens or reuses an existing hub tab.
-4. Select text and use the **Save selected passage** page context menu, or choose **Mark a visible region** and drag over the page. The popup offers both marking actions too. Marking an unsaved page adds a card but does not close the tab.
-5. Search across titles, sites, notes and saved passage text. Open a card's **Details** to see every marked piece, edit a note or correct the model's tentative guess. Use **Export**/**Import** for complete local backups.
-6. Use **How this works** in the hub header for the complete plain-language guide rendered from [`HOW_IT_WORKS.md`](HOW_IT_WORKS.md); **Copy formatted text** writes semantic HTML and a plain-text alternative without reading the clipboard.
-7. Use a card's **Delete** action, **Select references** for a batch, or **Delete collection** for a whole group. A confirmation is required before permanently removing Tab Hub's local links and media. Existing older archived items remain in **Previously archived** until explicitly restored or deleted; their matching URLs no longer silently absorb new region marks.
+- One card per normalized page (thread), newest save as the face, read-only projection over existing v0.1.2–v0.3 records.
+- Four-column staggered grid with distinct page, passage and region faces, stacks, and a right-hand thread panel (inline under the grid on narrow screens). One-row header: wordmark, search, filter, More (Export/Import).
+- Checked filter combining a native tab-group name with a save type. Notes and guesses stay stored and searchable but are not shown this round.
+- Opening a save returns to its spot: native text fragments for passages, captured anchors for new regions.
+- One-click delete with per-item five-second undo toasts and Cmd/Ctrl+Z; purge afterwards uses the v0.3 restart-safe deletion lock. Backups wait for undo windows to close.
+- Plain popup list with Chrome-reported shortcuts; semantic light/dark tokens; bundled open-licence serif.
 
-## What is built
+Evidence: 27 unit and 58 Chromium end-to-end tests pass (one opt-in recording test skipped); 96 synthetic screenshots and 13 recordings in `process/round-2/`; independent visual evaluator rounds are in `process/round-2/EVALUATION.md`.
 
-- Native tab-group preservation: name, colour, group membership, saved time and original tab order. Single tabs are collected in an individual-tab view; no automatic clustering or deletion.
-- Visual cards prefer the newest marked region/passage crop, then an active-tab viewport screenshot if available, otherwise a locally cached page preview, then a designed text fallback. The hub never embeds remote images; page-owned previews are fetched without cookies/referrer, with size, timeout and concurrency limits.
-- Group/card/note/guess metadata lives in `chrome.storage.local`; fragment lists and image blobs live in extension IndexedDB. `unlimitedStorage` is requested. A `.tabhub` ZIP contains all of these and imports without overwriting conflicting data.
-- Explicit deletion removes local card/group metadata, notes, guesses, fragments and image blobs, with a persistent deletion intent for retry on partial failure. Concurrent backup, note and legacy-restore operations are serialized with deletion. A backup made *before* a delete is not changed; one made *afterward* excludes deleted content. Legacy archive sidecars remain readable for pre-0.3.0 data and backups, but no new archive action exists.
-- The replaceable `GuessProvider` has a working no-op implementation and a Chrome on-device `LanguageModel` implementation. It runs only when the model is already available, uses an extension page rather than the MV3 worker, and never sends browsing content to an AI service.
-- WXT development mode (`npm run dev`) provides extension rebuild/hot reload. `npm run typecheck` and `npm test` cover types, unit behavior and persistent-profile Playwright Chromium end-to-end behavior.
+## Shipped in 0.3.0 (main)
 
-## Verified against the brief
+- Native tab-group save that verifies every URL and group record before closing the original tabs, plus single-tab save.
+- Selected-passage and dragged-region marks stored in IndexedDB; visual fallback order of crop, active screenshot, cached page preview, then text.
+- Local search over titles, sites, URLs, notes, guesses and passages; 600-card incremental rendering.
+- Confirmed permanent deletion with restart-safe intent, per-card media locks and orphan cleanup; legacy 0.2 archives retained under *Previously archived*.
+- Complete, conflict-safe `.tabhub` ZIP export/import; optional on-device Chrome `LanguageModel` guesses with a no-op fallback.
 
-| Outcome | Evidence |
-| --- | --- |
-| Loads unpacked without application errors | `tests/e2e/extension.spec.ts` |
-| One action saves at least 30 varied real pages; all appear, then originals close | `tests/e2e/real-urls.spec.ts`: 30/30 external pages settled in final run; 30 saved, displayed, closed only after verification |
-| Failures do not close tabs; no data lost on restart | `tests/e2e/capture.spec.ts` tests write failure, changed navigation, single/group and restart; real-URL test also restarts |
-| Visuals and intentional no-image states | `tests/e2e/hub.spec.ts`, including broken images and four-request limit; 16 synthetic light/dark, desktop/narrow, empty/ten/420, deletion-confirmation and legacy-archive screenshots in `screenshots/` |
-| Selected passage or region appears on its card | `tests/e2e/fragments.spec.ts` checks multiple marks, a stored crop and an unsaved-page mark |
-| Notes and optional editable guess | `tests/e2e/notes-ai.spec.ts`: note survives restart; model-absent and mocked available on-device paths; corrected guess survives reload |
-| Search and several-hundred-item usability | `tests/unit/search.test.ts` covers all fields; `tests/e2e/scale.spec.ts` checks 600 records, incremental rendering and responsive search |
-| User-controlled recovery | `tests/e2e/backup.spec.ts` exports/imports metadata, note, guess, fragment and image in a second browser profile and rejects conflicts |
-| Confirmed permanent deletion and safe upgrade | `tests/e2e/delete*.spec.ts` checks card/bulk/group removal, media cleanup, archived-region routing, concurrent capture/export/edit/restore and failure/restart recovery; `tests/e2e/legacy-archive.spec.ts` checks preserved archived references and older backup import |
+## Decisions and limits
 
-The cumulative suite passes **18 unit tests and 48 Chromium end-to-end tests**, including confirmed deletion, concurrency and restart recovery, capture, backup, region-marking, 30 real public pages and a 600-card library. Screenshots use synthetic data. The on-device model's actual presence on your own Chrome installation has not been asserted.
-
-## Decisions, limits and next work
-
-All implementation choices and alternatives are recorded in [`DECISIONS.md`](DECISIONS.md): compact group rail/grid layout, page selection and drag-to-crop, local split storage, visual fallback order, WXT, broad page permission for one-action capture, optional on-device AI, and conflict-safe ZIP backups. The research and non-copied precedents are in [`RESEARCH.md`](RESEARCH.md); license acknowledgements are in [`CREDITS.md`](CREDITS.md); pass-by-pass evidence is in [`PROGRESS.md`](PROGRESS.md).
-
-[`BLOCKERS.md`](BLOCKERS.md) records the remaining limits and user actions: keep an exported archive securely, optional model availability, `file://` permission and the 500 MB backup cap. Version 0.2.0 is installed unpacked in the user's Chrome profile. The largest **open product problem** is recollection of the exact fragment: generic image coverage was explicitly rejected as an answer. [`RESEARCH.md`](RESEARCH.md) and [`DECISIONS.md`](DECISIONS.md) record why. Save-time preservation of the page as encountered, with later fragment selection, is a research direction rather than a committed feature; validate it against real recall before implementation. Streaming backups remain a separate durability improvement.
+Choices and alternatives are in [`DECISIONS.md`](DECISIONS.md) (round 2 detail in `process/round-2/DECISIONS.md`); limits and user actions are in [`BLOCKERS.md`](BLOCKERS.md). The largest open product question remains recollection of the exact fragment that made a page worth saving; generic image coverage was explicitly rejected as the answer.

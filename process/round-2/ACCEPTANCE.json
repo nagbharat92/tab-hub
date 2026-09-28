@@ -1,0 +1,595 @@
+[
+  {
+    "id": "workflow-preserve-v0.1.2",
+    "description": "## Step 0: preserve v0.1.2 before changing anything\n- If the project is not already a git repository, initialise one and commit the current state as it is.\n- Tag the current state as `v0.1.2`.\n- Build the extension and save the built output as `releases/tab-hub-v0.1.2.zip`. If you can create a GitHub release for the tag, attach the zip there too; if not, the releases folder is enough.\n- Create a branch called `round-2`. Do all work for this round on that branch. Do not merge it into main.\n- Create `process/round-1/` and move the v0.1.2 handoff documents and screenshots into it. Leave anything already placed there untouched.\n- Create `process/round-2/` and copy this file into it.\n\nThis step is not optional. It must be possible to reload v0.1.2 exactly as it is today.",
+    "passes": true,
+    "evidence": [
+      "git tag v0.1.2 -> 52d5600; historical npm run build succeeded in isolated worktree; unzip -tq releases/tab-hub-v0.1.2.zip passed and manifest version is 0.1.2 (SHA-256 4dcfa1133b2af41a6c4d43c1d427b494127a8d2aa9cec3d343f75ce72df46798).",
+      "GitHub release https://github.com/nagbharat92/tab-hub/releases/tag/v0.1.2; process/round-1 contains historical documents and screenshots. Existing HEAD was v0.3.0, so the instruction to tag the then-current state as 0.1.2 could not literally be satisfied.",
+      "Existing evidence retained; branch round-2 created from main; process/round-1 holds the historical documents and screenshots; process/round-2/BRIEF-v0.2.md is an unchanged copy."
+    ]
+  },
+  {
+    "id": "section-why-this-round-exists",
+    "description": "## Why this round exists\n\nv0.1.2 works. The harness is proven. But the interface reads as something a model assembled: too much UI for simple things, headings that name what you can already see, explanations nobody asked for, and a card that is a container full of parts rather than a picture of what was saved.\n\nThis round is structural. It changes layout, card anatomy, the detail view, the popup, filtering, deletion and the empty state. It does **not** change the colour theme or pick final typefaces. That is round 3. Keep the current theme values, but move them into tokens so round 3 is a values swap.\n\nThe lens for every decision below: **every pixel has to earn its place.** If an element restates something already visible, explains something self-evident, or exists because a template had it, it goes.\n\nReference for the feel: the Siri app in iOS 27 and macOS 27. Soft, very round cards in a staggered grid, list on the left, detail on the right, almost no chrome. Screenshots are in `/design-references/siri/`.\n\n---",
+    "passes": false,
+    "evidence": [
+      "Theme values unchanged and moved behind semantic tokens (assets/theme.css). Structural changes evidenced by sections 1–9 below. The Siri reference folder was not supplied, so the reference study could not be performed (BLOCKERS.md)."
+    ]
+  },
+  {
+    "id": "section-principles-for-this-round",
+    "description": "## Principles for this round\n\n1. **The saves are the interface.** Chrome should be nearly invisible. The grid is the loudest thing on screen.\n2. **Nothing explains itself.** No taglines, eyebrows, instruction copy, help links or labels describing what a thing obviously is.\n3. **Shape tells you the type.** At thumbnail size nobody reads. Each kind of save has a distinct silhouette.\n4. **Motion is felt, not noticed.** Soft springs, one easing curve, nothing that reorders or jumps.\n5. **Undo, not confirm.** Nothing in Tab Hub is high stakes enough for a confirmation dialog.\n\n---",
+    "passes": true,
+    "evidence": [
+      "Independent evaluator pass recorded in EVALUATION.md."
+    ]
+  },
+  {
+    "id": "section-1",
+    "description": "## 1. The data model change: one card per page\n\nA page is now a **thread**. Every save made on the same page (the whole page, a passage, a region) belongs to one card.\n\n- Match pages by normalised URL: strip the hash fragment and common tracking parameters (`utm_*`, `s`, `t`, `ref`, `fbclid`, `gclid`, `si` and similar). An X link with `?s=20` must join the existing thread, not create a new one.\n- The card's face is always its **most recent** save. A page saved yesterday that gets a passage saved today now shows as a passage card.\n- Adding a save to an existing thread moves that card to the top of the grid. The grid is always sorted by last touched.\n- **Migration is required.** Existing v0.1.2 libraries must survive the upgrade intact. Merge any items that share a normalised URL into one thread. The henry.codes case in the current library (one item in UI Inspo, one under Individual tabs holding the marked pieces) must end up as a single thread.\n- Existing notes and model guesses stay in storage and stay searchable. They are not displayed anywhere this round.\n- Tab group membership is kept as data, since the filter uses it.\n\n---",
+    "passes": true,
+    "evidence": [
+      "tests/unit/urls.test.ts, tests/unit/threads.test.ts (henry.codes UI Inspo + Individual tabs fixture merges into one thread; newest save is face; notes/guesses retained and searchable).",
+      "tests/e2e/thread-migration.spec.ts: v0.1.2 fixture with duplicates upgrades without loss, survives restart and roundtrips backup; X ?s=20 joins its thread.",
+      "tests/e2e/round2-ui.spec.ts: grid sorted by last touched; group membership drives filter."
+    ]
+  },
+  {
+    "id": "section-2",
+    "description": "## 2. Header\n\nOne row. Nothing else above the grid.\n\n| Position | Element | Notes |\n|---|---|---|\n| Left | Wordmark \"Tab Hub\" | Normal weight. No icon, no tagline |\n| Right | Search field | Quiet: subtle outline, not a filled box |\n| Right | Filter button | See section 4 |\n| Right | More menu | Holds Export and Import only |\n\n**Removed:** the tagline \"A home for what caught your eye\", How this works, the Export and Import buttons as top-level items, the divider line under the header.\n\n---",
+    "passes": true,
+    "evidence": [
+      "Header one row: screenshots/arrival-grid-light-desktop.png, screenshots/arrival-grid-light-narrow.png, screenshots/arrival-grid-dark-desktop.png, screenshots/arrival-grid-dark-narrow.png; tests/e2e/how-it-works.spec.ts confirms removed guide/tagline; Export and Import live in More (tests/e2e/backup.spec.ts)."
+    ]
+  },
+  {
+    "id": "section-3",
+    "description": "## 3. Layout\n\n**Removed entirely:** the \"Your reference library\" eyebrow, the \"Your references.\" heading, the count, the \"Everything / N references\" block, the \"Select references\" control, the collections rail and its caption.\n\n### Arrival state\nA masonry grid, **four columns**, centred on the page with equal space either side. No selection, no panel.\n\n### Selecting a card\n1. The whole grid slides left as one block. This is a single transform. Columns do not change count, cards do not resize or reorder.\n2. A beat later, the side panel slides in from the right edge into the space that opened.\n3. Both use the same easing so it reads as one movement.\n\nThe panel is narrow, roughly a third of the viewport. Most of what you see is still the grid.\n\n### Once something is selected\nThe panel stays. There is no close button, and Esc or clicking the selected card again does nothing. Selecting a different card swaps the panel content.\n\nThe view resets to the arrival state (no selection, no panel, grid centred) when:\n- the search query changes\n- the filter changes\n- the last card in the hub is deleted (this lands on the empty state)\n- the hub tab is closed and reopened\n\n---",
+    "passes": true,
+    "evidence": [
+      "Arrival: screenshots/arrival-grid-light-desktop.png, screenshots/arrival-grid-light-narrow.png, screenshots/arrival-grid-dark-desktop.png, screenshots/arrival-grid-dark-narrow.png. Selection: screenshots/grid-with-panel-light-desktop.png, screenshots/grid-with-panel-light-narrow.png, screenshots/grid-with-panel-dark-desktop.png, screenshots/grid-with-panel-dark-narrow.png; recording recordings/r2-07-panel-mixed.mov.",
+      "tests/e2e/round2-ui.spec.ts: search change and filter change clear selection and panel; last-card delete lands on empty state (tests/e2e/delete-navigation.spec.ts). Selection is not persisted, so reopening resets.",
+      "Narrow widths place the panel inline after the grid (DECISIONS.md 15)."
+    ]
+  },
+  {
+    "id": "section-4",
+    "description": "## 4. Filter\n\nA single button beside the search field, opening a checked dropdown menu, modelled on the Siri filter menu.\n\n```\n✓ All\n  UI Inspo\n  Shop\n  Later 3\n  ...\n  ─────────\n  Pages\n  Passages\n  Regions\n```\n\n- **All** is selected by default.\n- Groups are listed by their Chrome tab group name. **No colour dots anywhere.** The \"Individual tabs\" pseudo-collection is gone; ungrouped saves simply appear under All.\n- One group and one type can be combined.\n- When anything other than All is active, the button turns darker and a text label appears beside it: \"Shop\", \"Passages\", or \"Shop · Passages\". Clicking the label clears back to All.\n- Changing the filter resets the view (section 3).\n\n---",
+    "passes": true,
+    "evidence": [
+      "screenshots/filter-menu-light-desktop.png, screenshots/filter-menu-light-narrow.png, screenshots/filter-menu-dark-desktop.png, screenshots/filter-menu-dark-narrow.png; screenshots/active-filter-light-desktop.png, screenshots/active-filter-light-narrow.png, screenshots/active-filter-dark-desktop.png, screenshots/active-filter-dark-narrow.png.",
+      "tests/e2e/round2-ui.spec.ts: All default, group names only (no Individual tabs), group + type combine and label reads 'UI Inspo · Passages'; clicking label clears."
+    ]
+  },
+  {
+    "id": "section-5",
+    "description": "## 5. Cards\n\nNo buttons on any card. No Details, no delete, no open icon, no group chip. Selecting the card opens the panel, and that is where actions live.\n\n### The three faces\n\n| Card | Contents, top to bottom | Treatment |\n|---|---|---|\n| **Page** | Meta line, title, image | Title in the heavy sans, tight leading. Image inset at the bottom with side margins and its own rounded corners, flowing past the bottom edge of the card the way Siri's image cards do. If there is no image, there is no image slot: just meta line and title, and the card is shorter |\n| **Passage** | Meta line, passage | Passage in the serif. No title, no image, no quote-in-a-box. Must never be mistaken for an imageless page card |\n| **Region** | Image, with meta line over it | Image is the whole card, full bleed. A frosted scrim across the top carries the meta line |\n\n**Removed from cards:** the description line, the duplicated title on text covers, the favicon row, the date as a separate element, group chips, all action buttons.\n\n### Meta line\nOne line: `domain · time`.\n- Domain without `www.`\n- For X links, show the handle instead: `@henrycodes · Tuesday`\n- Time is relative and coarse: Today, Yesterday, a weekday within the last week, then `12 Aug`, and `12 Aug 2025` only when the year differs\n\n### Frosted scrim on region cards\nA progressive blur: backdrop blur masked with a gradient so it fades out rather than ending on a hard line. Backdrop blur across hundreds of cards will hurt scrolling, so either bake the scrim into the stored thumbnail at save time (preferred) or render it only on cards in the viewport. Justify the choice in DECISIONS.md.\n\n### Surface\n\n| Detail | Spec |\n|---|---|\n| Corners | Siri-round. Roughly 24px on a ~260px card. Same on all three types |\n| Concentric rule | Everywhere. Inner radius equals outer radius minus padding. Images inside page cards have rounded corners that follow this rule. Region images take the card's radius |\n| Edge | No border. Card sits on a slightly darker warm page tone, with a very faint, wide shadow |\n| Dark mode | Lifted grey card, no shadow |\n| Gutter | Equal to the card's inner padding, around 16px. One spacing value for the grid |\n| Height | Set by content. No fixed aspect ratio |\n| Columns | Staggered start, as in Siri: alternate columns begin slightly lower so the grid never reads as a spreadsheet |\n\n### Stacks\nA card whose thread holds more than one save shows as a stack.\n- Front card straight. One card peeking out behind it, slightly narrower and offset, rotated 2 to 3 degrees.\n- Neighbouring stacks rotate in alternating directions so the grid never leans one way.\n- No count badge.\n\n### Hover and selection\n\n| State | Behaviour |\n|---|---|\n| Hover, single card | Lifts a few pixels, shadow deepens, soft spring |\n| Hover, stack | Lifts, and the card behind fans out further, like picking up a small pile |\n| Selected | 2px stroke in the accent colour, following the front card's curve |\n| Reduced motion | All lift, rotation, fan and slide animation off. Transitions become simple fades |\n\n---",
+    "passes": true,
+    "evidence": [
+      "Faces: screenshots/page-card-light-desktop.png, screenshots/page-card-light-narrow.png, screenshots/page-card-dark-desktop.png, screenshots/page-card-dark-narrow.png, screenshots/passage-card-light-desktop.png, screenshots/passage-card-light-narrow.png, screenshots/passage-card-dark-desktop.png, screenshots/passage-card-dark-narrow.png, screenshots/region-card-light-desktop.png, screenshots/region-card-light-narrow.png, screenshots/region-card-dark-desktop.png, screenshots/region-card-dark-narrow.png, screenshots/imageless-page-light-desktop.png, screenshots/imageless-page-light-narrow.png, screenshots/imageless-page-dark-desktop.png, screenshots/imageless-page-dark-narrow.png. Stacks: screenshots/stack-two-light-desktop.png, screenshots/stack-two-light-narrow.png, screenshots/stack-two-dark-desktop.png, screenshots/stack-two-dark-narrow.png, screenshots/stack-three-light-desktop.png, screenshots/stack-three-light-narrow.png, screenshots/stack-three-dark-desktop.png, screenshots/stack-three-dark-narrow.png, screenshots/stack-six-light-desktop.png, screenshots/stack-six-light-narrow.png, screenshots/stack-six-dark-desktop.png, screenshots/stack-six-dark-narrow.png, screenshots/stack-hover-light-desktop.png, screenshots/stack-hover-light-narrow.png, screenshots/stack-hover-dark-desktop.png, screenshots/stack-hover-dark-narrow.png. Selected: screenshots/selected-state-light-desktop.png, screenshots/selected-state-light-narrow.png, screenshots/selected-state-dark-desktop.png, screenshots/selected-state-dark-narrow.png.",
+      "tests/unit/meta.test.ts: domain without www, X handle, Today/Yesterday/weekday/date/year.",
+      "Scrim choice: DECISIONS.md 11."
+    ]
+  },
+  {
+    "id": "section-6",
+    "description": "## 6. Side panel\n\n**Replaces the Details dialog entirely.** No modal, no overlay.\n\n### Top of panel\nOne button: favicon, page title truncated to a single line, open arrow. Clicking it opens the original page in a new tab. Beside it, a delete icon for the whole page (section 7).\n\nNothing else at the top. The selected card is visible in the grid, so the panel does not repeat its domain, date or URL.\n\n### The thread\nEvery save for that page, newest first, scrollable. Each one is rendered exactly as it looks in the grid (page capture, passage, region) so it is recognised instantly. Each shows its time only, no type label.\n\nHovering a save reveals a small delete icon for that save alone.\n\n### Opening a save\nClicking a save opens the page in a new tab and takes you to that exact spot, with smooth fades throughout.\n\n| Save | Behaviour |\n|---|---|\n| Passage | Open with a Chrome text fragment link (`#:~:text=`). Use Chrome's native highlight. No custom treatment this round |\n| Region | Use the anchor captured at save time (nearest element, surrounding text, scroll offset). A content script scrolls to it and draws a plain outline that fades out |\n| Page | Opens at the top |\n\nIf a passage or region cannot be found (page changed, content deleted, logged-out wall), open at the top of the page silently. No error, no message.\n\nIf regions do not already capture an anchor at save time, add that. Existing regions without anchors fall back to opening at the top.\n\n### Removed\nThe eyebrow, the subtitle \"Keep the exact piece that made this page worth saving\", the Open original button, the full URL, \"Marked pieces\" and its count, the duplicate rendering of passages, \"Selected passage\" and \"Visual region\" labels, the note field and its heading, \"Only you see this\", \"Saved on this device\", Save changes, Done, the close X.\n\n---",
+    "passes": true,
+    "evidence": [
+      "screenshots/panel-mixed-thread-light-desktop.png, screenshots/panel-mixed-thread-light-narrow.png, screenshots/panel-mixed-thread-dark-desktop.png, screenshots/panel-mixed-thread-dark-narrow.png; recordings/r2-07-panel-mixed.mov, r2-07a-passage-original.mov, r2-07b-region-original.mov.",
+      "tests/e2e/round2-ui.spec.ts: passage opens with #:~:text=, anchored region scrolls and outlines, page opens at the top without a hash; no dialog is rendered.",
+      "tests/e2e/fragments.spec.ts: new regions capture an anchor."
+    ]
+  },
+  {
+    "id": "section-7",
+    "description": "## 7. Delete\n\nOne click. No confirmation dialog anywhere.\n\n| Action | Result |\n|---|---|\n| Delete icon on a save in the thread | That save fades out |\n| Delete icon at the top of the panel | The whole page leaves the grid |\n| Delete or Backspace with a card selected | Deletes the whole page |\n| Deleting the last save in a thread | Deletes the page, no empty cards left behind |\n| After any page delete | The next card in the grid becomes selected automatically, so repeated Delete presses work through the grid without the mouse |\n\n### Undo\n- Every delete shows its own toast: \"Deleted · Undo\".\n- Use the shadcn Sonner toast. Toasts stack with its standard animation: newest in front, older ones tucked behind, fanning out on hover.\n- Each toast has its own 5 second timer, paused on hover.\n- Undo restores that one item to its original position.\n- Cmd+Z (Ctrl+Z elsewhere) undoes the most recent delete, and repeats.\n- Deletes are soft. Each item is purged when its toast expires.\n\n**Removed:** the \"Permanently delete\" dialog, its copy, and multi-select mode.\n\n---",
+    "passes": true,
+    "evidence": [
+      "tests/e2e/round2-ui.spec.ts and tests/e2e/delete.spec.ts: one-click save and page delete, Ctrl/Cmd+Z undo, undo survives reload, expiry purges, last save removes the page, next card becomes selected, 55 repeated Delete presses.",
+      "Toasts: screenshots/three-stacked-toasts-light-desktop.png, screenshots/three-stacked-toasts-light-narrow.png, screenshots/three-stacked-toasts-dark-desktop.png, screenshots/three-stacked-toasts-dark-narrow.png, screenshots/toast-fan-hover-light-desktop.png, screenshots/toast-fan-hover-light-narrow.png, screenshots/toast-fan-hover-dark-desktop.png, screenshots/toast-fan-hover-dark-narrow.png; recordings/r2-08-delete-undo.mov."
+    ]
+  },
+  {
+    "id": "section-8",
+    "description": "## 8. Toolbar popup\n\nA plain list. No logo, no name, no tagline.\n\n```\n[layers]    Save Shop · 6 tabs          ⌘⇧S\n[save]      Save this tab               ⌘S\n─────────\n[marker]    Save the text you selected  ⌘⇧E\n[crop]      Save part of the page       ⌘⇧R\n─────────\n[arrow]     Open Tab Hub                ⌘⇧H\n```\n\nShortcut keys above are placeholders. Choose ones that do not collide with Chrome defaults and log them in DECISIONS.md.\n\n| Rule | Detail |\n|---|---|\n| Icons | On the left of each label. Replace the scissors with a save icon |\n| Shortcuts | On the right, in quiet grey text. This is the only place shortcuts are documented |\n| Group save | Only shown when the current tab is in a group. Label is `Save <group name> · <n> tabs`. The count stays because it tells you exactly what is about to leave the tab strip. It is the most prominent item through position and weight, **not** a filled red button |\n| Save this tab | Same visual weight as every other item. No box |\n| Save the text you selected | Always listed, disabled unless there is a text selection on the page |\n| Restricted pages | On the new tab page, `chrome://` pages, the Web Store and other pages extensions cannot touch, both text and region saves are disabled |\n| After an action | The popup closes and the tab or group disappears. No confirmation, no toast, no badge. Things vanish, and that is the feedback |\n\n---",
+    "passes": true,
+    "evidence": [
+      "Popup: screenshots/popup-inside-group-{light,dark}.png, popup-outside-group-selected-*, popup-outside-group-unselected-*, popup-restricted-page-*.",
+      "tests/e2e/region-regression.spec.ts: popup closes after starting a region and stays open on failure; tests/e2e/capture.spec.ts: tabs close only after verified save.",
+      "Shortcuts: DECISIONS.md 12 (no fifth shortcut for regions; BLOCKERS.md)."
+    ]
+  },
+  {
+    "id": "section-9",
+    "description": "## 9. Empty state\n\n- Header shows only the wordmark and the more menu. Search and filter appear with the first save. Import must remain reachable for someone restoring a backup.\n- Centred on the page, one sentence: **Save a tab from the Tab Hub button in your toolbar.**\n- Nothing else. **Removed:** the eyebrow, \"Keep the thought. Close the tabs.\", the subtitle, the dashed box, the book icon, \"Nothing tucked away yet\".\n\n---",
+    "passes": true,
+    "evidence": [
+      "screenshots/empty-light-desktop.png, screenshots/empty-light-narrow.png, screenshots/empty-dark-desktop.png, screenshots/empty-dark-narrow.png; tests/e2e/extension.spec.ts and tests/e2e/how-it-works.spec.ts: one sentence, no search/filter, Import reachable via More."
+    ]
+  },
+  {
+    "id": "section-10",
+    "description": "## 10. Tokens and type\n\nKeep every current colour value. Change the structure, not the look.\n\n### Semantic tokens, light and dark\n`page`, `card`, `card-raised`, `text-primary`, `text-secondary`, `text-tertiary`, `accent`, `stroke-selected`, `scrim`, `shadow`, `toast-surface`\n\nNo component may use a raw colour value. Round 3 must be able to reskin the whole product by editing token values only.\n\n### Type\n- Font families are tokens too: `font-sans`, `font-serif`.\n- Sans: keep the current face.\n- Serif: add a placeholder serif with a good italic, bundled locally under an open licence (Newsreader or Instrument Serif, for example). The passage card depends on it, so it cannot wait for round 3.\n- **Four sizes in total:** meta line, UI text, card title, passage. Nothing else.\n\n### Where the accent may appear\nOnly three places: the selected card stroke, focus rings, and the text caret. Nowhere else. Not buttons, not headings, not the filter state, not toasts.\n\n---",
+    "passes": true,
+    "evidence": [
+      "assets/theme.css defines page, card, card-raised, text-primary/secondary/tertiary, accent, stroke-selected, scrim, shadow, toast-surface, font-sans, font-serif and four size tokens; grep finds no raw colour values in entrypoints/, components/ or src/.",
+      "Instrument Serif (OFL, assets/fonts/OFL.txt) bundled locally. Accent used only for selected stroke, focus rings, caret (region selector uses system colours, DECISIONS.md 25)."
+    ]
+  },
+  {
+    "id": "section-out-of-scope-this-round",
+    "description": "## Out of scope this round\n\nDo not build these. They are parked on purpose.\n\n| Parked | For |\n|---|---|\n| Colour theme, final typefaces, brand character | Round 3 |\n| Notes as a chat thread with a composer in the panel | Later |\n| Save confirmations of any kind (toasts, badges) | Polish pass |\n| Custom highlight treatment for passages | Polish pass |\n| Ghost-card empty state teaching the three save types | Later, if the plain sentence proves insufficient |\n| Displaying model guesses | Later |\n| Grid and list view toggle | Not planned |\n\n---",
+    "passes": true,
+    "evidence": [
+      "Not built: tests/e2e/notes-ai.spec.ts confirms notes and guesses are not displayed; popup closes without save toast or badge; no list toggle or ghost empty state (see empty-* screenshots)."
+    ]
+  },
+  {
+    "id": "section-how-to-run-this-round",
+    "description": "## How to run this round\n\nYou are working with no human in the loop. Every decision you need is above or in BRIEF.md. Do not stop to ask.\n\n### Before building\n1. Read BRIEF.md, the v0.1 addendum and this document in full.\n2. Vendor two design skills into `/skills` in the repo and read them before any UI work:\n   - Anthropic's frontend-design skill: `github.com/anthropics/claude-code/blob/main/plugins/frontend-design/skills/frontend-design/SKILL.md`\n   - Apple Design Skill: `github.com/nutshellengineering/apple-design-skill`\n   From the Apple skill, use only the foundations: materials, motion, typography, layout, accessibility. The component guidance is for native apps and does not apply to a browser extension. Mirrored HIG content stays in the dev repo and never ships in the extension bundle.\n3. Study the Siri references in `/design-references/siri/`.\n4. Create `ACCEPTANCE.json`: every numbered section and table row above becomes an item with `id`, `description`, `passes: false` and `evidence: []`.\n\n### Acceptance rules\n- An item flips to `passes: true` only after a screenshot or test result is appended to its `evidence`.\n- Never delete an item, reword it to make it easier, weaken a test or remove an assertion to get a pass.\n- Existing 12 unit and 20 end-to-end tests must still pass, updated only where this brief changes the behaviour they check. Log every changed test in DECISIONS.md with the reason.\n\n### When the brief is silent\nChoose the option with **fewer visible elements**. Log the choice and the alternative in DECISIONS.md. Keep going.\n\n### Forbidden, whatever seems helpful\nTaglines. Eyebrows. Page or section headings. Counts (except the group save label in the popup). Help links or tooltips explaining features. Instruction copy. Confirmation dialogs. Colour dots. Type labels on saves. Any new button, badge, divider or piece of chrome not specified here. Default shadcn styling left unmodified.\n\n### Build and test\n- Throwaway Chromium profiles only, via Playwright persistent context. **Do not install into or touch the user's Chrome profile.**\n- Test with real data: the 30+ real URLs from round 1, including logged-out X links, plus fixtures that produce every card type, imageless pages, long titles, long passages, light and dark screenshots, and stacks of two, three and six saves.\n- Include a migration test: load a v0.1.2 library fixture containing duplicate URLs, upgrade, and verify threads, order and no data loss.\n- Keep permissions as narrow as the features allow. Region jumping needs script access on the opened page; prefer optional host permissions requested at first use over broad access at install. Justify whatever you choose in DECISIONS.md.\n\n### Screenshot matrix\nCapture each of these in light and dark, desktop and narrow, and with reduced motion where motion is involved:\nempty state · arrival grid · grid with panel open · each card type · imageless page card · stacks at rest and on hover · selected state · filter menu open · active filter label · panel thread with mixed saves · three stacked delete toasts · popup inside a group · popup outside a group · popup with text selected and without · popup on a restricted page.\nMotion states (grid slide, panel arrival, stack fan, toast stacking) also as short screen recordings.\n\n### The evaluator pass\nDo not grade your own design. After the build passes its tests, run a **separate review with fresh context**: a new session or subagent that receives only this brief's criteria below, the screenshot matrix and the recordings. It never sees the code, the build log or your reasoning.\n\nThe evaluator scores each criterion from 1 to 5, lists every failure before any praise, and must cite a specific screenshot for each finding. A score below 4 on any criterion fails the round.\n\n| Criterion | The question |\n|---|---|\n| **Every pixel earns its place** | Is there any element that restates something visible, explains the obvious, or would not be missed if removed? |\n| **The saves are the interface** | Is the grid unmistakably the loudest thing on every screen? Does chrome recede? |\n| **Shape tells the type** | At thumbnail size, with text blurred, can you tell page, passage and region apart? Is an imageless page card clearly not a passage? |\n| **Not assembled by a model** | Does anything look like a library default, a template, or generic AI-generated UI? Any unmodified shadcn component fails here |\n| **Craft** | Concentric corners everywhere, one spacing value, four type sizes, accent only in its three places, dark mode as considered as light |\n| **Motion** | Does selecting a card feel like one calm movement? Does anything jump, reflow or resize? Is reduced motion respected? |\n| **Faithful to the brief** | Is every decision above implemented as written, and is anything present that the brief did not ask for? |\n\nFeed the evaluator's findings back into the build and repeat. Run **up to five** evaluator rounds. Keep screenshots from every round, since an earlier round may turn out better than the last.\n\n### Stop condition\nStop when every item in `ACCEPTANCE.json` has evidence and the evaluator passes all criteria, **or** when the ceiling below is reached, whichever comes first. If you stop on the ceiling, say so plainly in SUMMARY.md and list what remains.\n\n**Ceiling:** as set in Part 1.\n\n### Blockers\nIf something cannot be built as specified (a Chrome API limit, a performance wall), stub it behind the closest working behaviour, log it in BLOCKERS.md with what you tried, and continue.\n\n---",
+    "passes": false,
+    "evidence": [
+      "Final suite 2026-09-27: 27 unit tests and 58/59 Chromium e2e tests pass (1 recording-only test skipped by design).",
+      "Skills vendored in skills/; ACCEPTANCE.json generated by scripts/create-acceptance.mjs; changed tests logged in DECISIONS.md 9 and 28; throwaway Playwright profiles only.",
+      "Evaluator loop recorded in EVALUATION.md."
+    ]
+  },
+  {
+    "id": "section-deliverable",
+    "description": "## Deliverable\n\nThe same curated handoff folder as v0.1.2, updated for v0.2.0:\n\n| File | Contents |\n|---|---|\n| START_HERE.md | How to load and try v0.2.0 in under two minutes |\n| SUMMARY.md | What changed, what passed, what did not, and whether you stopped on the stop condition or the ceiling |\n| DECISIONS.md | Every choice the brief left open, with the alternative you rejected |\n| BLOCKERS.md | Anything stubbed, and why |\n| ACCEPTANCE.json | Every item with its evidence |\n| EVALUATION.md | Each evaluator round: scores, findings, what you changed in response |\n| CHANGELOG.md | v0.1.2 to v0.2.0 |\n| `/screenshots` | The full matrix from the final round, plus the best earlier round if different |\n| `/recordings` | The motion states |",
+    "passes": true,
+    "evidence": [
+      "process/round-2 contains START_HERE.md, SUMMARY.md, DECISIONS.md, BLOCKERS.md, ACCEPTANCE.json, EVALUATION.md, CHANGELOG.md, screenshots/ and recordings/."
+    ]
+  },
+  {
+    "id": "table-row-120",
+    "description": "| Left | Wordmark \"Tab Hub\" | Normal weight. No icon, no tagline |",
+    "passes": true,
+    "evidence": [
+      "screenshots/arrival-grid-light-desktop.png, screenshots/arrival-grid-light-narrow.png, screenshots/arrival-grid-dark-desktop.png, screenshots/arrival-grid-dark-narrow.png: wordmark 'Tab Hub' at normal weight, no icon or tagline."
+    ]
+  },
+  {
+    "id": "table-row-121",
+    "description": "| Right | Search field | Quiet: subtle outline, not a filled box |",
+    "passes": true,
+    "evidence": [
+      "screenshots/arrival-grid-light-desktop.png, screenshots/arrival-grid-light-narrow.png, screenshots/arrival-grid-dark-desktop.png, screenshots/arrival-grid-dark-narrow.png: outlined, unfilled search field."
+    ]
+  },
+  {
+    "id": "table-row-122",
+    "description": "| Right | Filter button | See section 4 |",
+    "passes": true,
+    "evidence": [
+      "screenshots/filter-menu-light-desktop.png, screenshots/filter-menu-light-narrow.png, screenshots/filter-menu-dark-desktop.png, screenshots/filter-menu-dark-narrow.png; tests/e2e/round2-ui.spec.ts filter behaviour."
+    ]
+  },
+  {
+    "id": "table-row-123",
+    "description": "| Right | More menu | Holds Export and Import only |",
+    "passes": true,
+    "evidence": [
+      "tests/e2e/backup.spec.ts and design.spec.ts use More → Export/Import. Legacy-only exception documented in DECISIONS.md 27."
+    ]
+  },
+  {
+    "id": "table-row-186",
+    "description": "| **Page** | Meta line, title, image | Title in the heavy sans, tight leading. Image inset at the bottom with side margins and its own rounded corners, flowing past the bottom edge of the card the way Siri's image cards do. If there is no image, there is no image slot: just meta line and title, and the card is shorter |",
+    "passes": true,
+    "evidence": [
+      "screenshots/page-card-light-desktop.png, screenshots/page-card-light-narrow.png, screenshots/page-card-dark-desktop.png, screenshots/page-card-dark-narrow.png; screenshots/imageless-page-light-desktop.png, screenshots/imageless-page-light-narrow.png, screenshots/imageless-page-dark-desktop.png, screenshots/imageless-page-dark-narrow.png (no image slot, shorter card); screenshots/long-title-light-desktop.png, screenshots/long-title-light-narrow.png, screenshots/long-title-dark-desktop.png, screenshots/long-title-dark-narrow.png."
+    ]
+  },
+  {
+    "id": "table-row-187",
+    "description": "| **Passage** | Meta line, passage | Passage in the serif. No title, no image, no quote-in-a-box. Must never be mistaken for an imageless page card |",
+    "passes": true,
+    "evidence": [
+      "screenshots/passage-card-light-desktop.png, screenshots/passage-card-light-narrow.png, screenshots/passage-card-dark-desktop.png, screenshots/passage-card-dark-narrow.png; screenshots/long-passage-light-desktop.png, screenshots/long-passage-light-narrow.png, screenshots/long-passage-dark-desktop.png, screenshots/long-passage-dark-narrow.png: meta + serif passage only."
+    ]
+  },
+  {
+    "id": "table-row-188",
+    "description": "| **Region** | Image, with meta line over it | Image is the whole card, full bleed. A frosted scrim across the top carries the meta line |",
+    "passes": true,
+    "evidence": [
+      "screenshots/region-card-light-desktop.png, screenshots/region-card-light-narrow.png, screenshots/region-card-dark-desktop.png, screenshots/region-card-dark-narrow.png: full-bleed image with progressive frosted meta scrim."
+    ]
+  },
+  {
+    "id": "table-row-205",
+    "description": "| Corners | Siri-round. Roughly 24px on a ~260px card. Same on all three types |",
+    "passes": true,
+    "evidence": [
+      "hub.css: 24px radius on .reference-card, .thread-face and the stack back card; see page-card, passage-card and region-card screenshots."
+    ]
+  },
+  {
+    "id": "table-row-206",
+    "description": "| Concentric rule | Everywhere. Inner radius equals outer radius minus padding. Images inside page cards have rounded corners that follow this rule. Region images take the card's radius |",
+    "passes": true,
+    "evidence": [
+      "hub.css: card radius 24, padding 16, page inset image radius 8 (24 − 16); region image clipped by the 24px face."
+    ]
+  },
+  {
+    "id": "table-row-207",
+    "description": "| Edge | No border. Card sits on a slightly darker warm page tone, with a very faint, wide shadow |",
+    "passes": true,
+    "evidence": [
+      "screenshots/arrival-grid-light-desktop.png, screenshots/arrival-grid-dark-desktop.png: no border, warm page tone, wide faint shadow token."
+    ]
+  },
+  {
+    "id": "table-row-208",
+    "description": "| Dark mode | Lifted grey card, no shadow |",
+    "passes": true,
+    "evidence": [
+      "screenshots/arrival-grid-dark-desktop.png, arrival-grid-dark-narrow.png: lifted grey card, no shadow."
+    ]
+  },
+  {
+    "id": "table-row-209",
+    "description": "| Gutter | Equal to the card's inner padding, around 16px. One spacing value for the grid |",
+    "passes": true,
+    "evidence": [
+      "hub.css: grid gap 16px equals card padding 16px at every width (DECISIONS.md 24–26 pass)."
+    ]
+  },
+  {
+    "id": "table-row-210",
+    "description": "| Height | Set by content. No fixed aspect ratio |",
+    "passes": true,
+    "evidence": [
+      "Card height follows content; images use their natural clamped aspect (DECISIONS.md 24)."
+    ]
+  },
+  {
+    "id": "table-row-211",
+    "description": "| Columns | Staggered start, as in Siri: alternate columns begin slightly lower so the grid never reads as a spreadsheet |",
+    "passes": true,
+    "evidence": [
+      "screenshots/arrival-grid-light-desktop.png, screenshots/arrival-grid-light-narrow.png, screenshots/arrival-grid-dark-desktop.png, screenshots/arrival-grid-dark-narrow.png: even columns start lower."
+    ]
+  },
+  {
+    "id": "table-row-223",
+    "description": "| Hover, single card | Lifts a few pixels, shadow deepens, soft spring |",
+    "passes": true,
+    "evidence": [
+      "hub.css: hover lifts 4px and doubles the shadow token with a spring curve; recordings/r2-06-card-hover.mov."
+    ]
+  },
+  {
+    "id": "table-row-224",
+    "description": "| Hover, stack | Lifts, and the card behind fans out further, like picking up a small pile |",
+    "passes": true,
+    "evidence": [
+      "screenshots/stack-hover-light-desktop.png, screenshots/stack-hover-light-narrow.png, screenshots/stack-hover-dark-desktop.png, screenshots/stack-hover-dark-narrow.png; recordings/r2-06-card-hover.mov: back card fans further."
+    ]
+  },
+  {
+    "id": "table-row-225",
+    "description": "| Selected | 2px stroke in the accent colour, following the front card's curve |",
+    "passes": true,
+    "evidence": [
+      "screenshots/selected-state-light-desktop.png, screenshots/selected-state-light-narrow.png, screenshots/selected-state-dark-desktop.png, screenshots/selected-state-dark-narrow.png: 2px accent outline following the card radius."
+    ]
+  },
+  {
+    "id": "table-row-226",
+    "description": "| Reduced motion | All lift, rotation, fan and slide animation off. Transitions become simple fades |",
+    "passes": true,
+    "evidence": [
+      "screenshots/reduced-motion-panel-light-desktop.png, screenshots/reduced-motion-panel-light-narrow.png, screenshots/reduced-motion-panel-dark-desktop.png, screenshots/reduced-motion-panel-dark-narrow.png, screenshots/reduced-motion-stack-light-desktop.png, screenshots/reduced-motion-stack-light-narrow.png, screenshots/reduced-motion-stack-dark-desktop.png, screenshots/reduced-motion-stack-dark-narrow.png, screenshots/reduced-motion-toasts-light-desktop.png, screenshots/reduced-motion-toasts-light-narrow.png, screenshots/reduced-motion-toasts-dark-desktop.png, screenshots/reduced-motion-toasts-dark-narrow.png: no lift, rotation, fan or slide; panel fades."
+    ]
+  },
+  {
+    "id": "table-row-249",
+    "description": "| Passage | Open with a Chrome text fragment link (`#:~:text=`). Use Chrome's native highlight. No custom treatment this round |",
+    "passes": true,
+    "evidence": [
+      "tests/e2e/round2-ui.spec.ts: opened passage URL contains #:~:text=; recordings/r2-07a-passage-original.mov."
+    ]
+  },
+  {
+    "id": "table-row-250",
+    "description": "| Region | Use the anchor captured at save time (nearest element, surrounding text, scroll offset). A content script scrolls to it and draws a plain outline that fades out |",
+    "passes": true,
+    "evidence": [
+      "tests/e2e/round2-ui.spec.ts: anchored region scrolls and draws a fading outline; tests/e2e/fragments.spec.ts: anchor captured; recordings/r2-07b-region-original.mov."
+    ]
+  },
+  {
+    "id": "table-row-251",
+    "description": "| Page | Opens at the top |",
+    "passes": true,
+    "evidence": [
+      "tests/e2e/round2-ui.spec.ts: page save opens without a hash at scrollY 0."
+    ]
+  },
+  {
+    "id": "table-row-268",
+    "description": "| Delete icon on a save in the thread | That save fades out |",
+    "passes": true,
+    "evidence": [
+      "main.tsx fades a save for 180ms before soft delete; tests/e2e/round2-ui.spec.ts removes the save from the panel."
+    ]
+  },
+  {
+    "id": "table-row-269",
+    "description": "| Delete icon at the top of the panel | The whole page leaves the grid |",
+    "passes": true,
+    "evidence": [
+      "tests/e2e/round2-ui.spec.ts and delete.spec.ts: panel header delete removes the page from the grid."
+    ]
+  },
+  {
+    "id": "table-row-270",
+    "description": "| Delete or Backspace with a card selected | Deletes the whole page |",
+    "passes": true,
+    "evidence": [
+      "tests/e2e/delete.spec.ts: repeated Delete key presses remove successive pages."
+    ]
+  },
+  {
+    "id": "table-row-271",
+    "description": "| Deleting the last save in a thread | Deletes the page, no empty cards left behind |",
+    "passes": true,
+    "evidence": [
+      "tests/e2e/round2-ui.spec.ts and delete.spec.ts: deleting the last save removes the page with no empty card."
+    ]
+  },
+  {
+    "id": "table-row-272",
+    "description": "| After any page delete | The next card in the grid becomes selected automatically, so repeated Delete presses work through the grid without the mouse |",
+    "passes": true,
+    "evidence": [
+      "tests/e2e/round2-ui.spec.ts asserts a new card is selected; delete.spec.ts exercises repeated Delete without the mouse."
+    ]
+  },
+  {
+    "id": "table-row-304",
+    "description": "| Icons | On the left of each label. Replace the scissors with a save icon |",
+    "passes": true,
+    "evidence": [
+      "Popup screenshots: icons left, save icon replaces scissors."
+    ]
+  },
+  {
+    "id": "table-row-305",
+    "description": "| Shortcuts | On the right, in quiet grey text. This is the only place shortcuts are documented |",
+    "passes": true,
+    "evidence": [
+      "Popup screenshots: shortcuts right in tertiary grey; the hub shows no shortcut documentation."
+    ]
+  },
+  {
+    "id": "table-row-306",
+    "description": "| Group save | Only shown when the current tab is in a group. Label is `Save <group name> · <n> tabs`. The count stays because it tells you exactly what is about to leave the tab strip. It is the most prominent item through position and weight, **not** a filled red button |",
+    "passes": true,
+    "evidence": [
+      "screenshots/popup-inside-group-{light,dark}.png: 'Save Shop · 6 tabs', first and heavier, not filled; absent in outside-group screenshots."
+    ]
+  },
+  {
+    "id": "table-row-307",
+    "description": "| Save this tab | Same visual weight as every other item. No box |",
+    "passes": true,
+    "evidence": [
+      "Popup screenshots: 'Save this tab' same weight, no box."
+    ]
+  },
+  {
+    "id": "table-row-308",
+    "description": "| Save the text you selected | Always listed, disabled unless there is a text selection on the page |",
+    "passes": true,
+    "evidence": [
+      "popup-outside-group-selected-* enabled vs popup-outside-group-unselected-* disabled."
+    ]
+  },
+  {
+    "id": "table-row-309",
+    "description": "| Restricted pages | On the new tab page, `chrome://` pages, the Web Store and other pages extensions cannot touch, both text and region saves are disabled |",
+    "passes": true,
+    "evidence": [
+      "popup-restricted-page-{light,dark}.png: text and region saves disabled on chrome://settings."
+    ]
+  },
+  {
+    "id": "table-row-310",
+    "description": "| After an action | The popup closes and the tab or group disappears. No confirmation, no toast, no badge. Things vanish, and that is the feedback |",
+    "passes": true,
+    "evidence": [
+      "tests/e2e/region-regression.spec.ts: popup dismisses after action; tests/e2e/capture.spec.ts: saved tabs close; no toast or badge on success."
+    ]
+  },
+  {
+    "id": "table-row-348",
+    "description": "| Colour theme, final typefaces, brand character | Round 3 |",
+    "passes": true,
+    "evidence": [
+      "No theme or typeface change: assets/theme.css values unchanged."
+    ]
+  },
+  {
+    "id": "table-row-349",
+    "description": "| Notes as a chat thread with a composer in the panel | Later |",
+    "passes": true,
+    "evidence": [
+      "No notes composer: tests/e2e/notes-ai.spec.ts asserts no note UI."
+    ]
+  },
+  {
+    "id": "table-row-350",
+    "description": "| Save confirmations of any kind (toasts, badges) | Polish pass |",
+    "passes": true,
+    "evidence": [
+      "No save confirmation toast or badge (popup closes)."
+    ]
+  },
+  {
+    "id": "table-row-351",
+    "description": "| Custom highlight treatment for passages | Polish pass |",
+    "passes": true,
+    "evidence": [
+      "Passages use Chrome's native text-fragment highlight only."
+    ]
+  },
+  {
+    "id": "table-row-352",
+    "description": "| Ghost-card empty state teaching the three save types | Later, if the plain sentence proves insufficient |",
+    "passes": true,
+    "evidence": [
+      "screenshots/empty-light-desktop.png, screenshots/empty-light-narrow.png, screenshots/empty-dark-desktop.png, screenshots/empty-dark-narrow.png: single sentence, no ghost cards."
+    ]
+  },
+  {
+    "id": "table-row-353",
+    "description": "| Displaying model guesses | Later |",
+    "passes": true,
+    "evidence": [
+      "tests/e2e/notes-ai.spec.ts: guesses are stored and searchable but not displayed."
+    ]
+  },
+  {
+    "id": "table-row-354",
+    "description": "| Grid and list view toggle | Not planned |",
+    "passes": true,
+    "evidence": [
+      "No grid/list toggle exists in the header screenshots."
+    ]
+  },
+  {
+    "id": "table-row-400",
+    "description": "| **Every pixel earns its place** | Is there any element that restates something visible, explains the obvious, or would not be missed if removed? |",
+    "passes": true,
+    "evidence": [
+      "Final evaluator round scores ≥ 4 on this criterion (EVALUATION.md)."
+    ]
+  },
+  {
+    "id": "table-row-401",
+    "description": "| **The saves are the interface** | Is the grid unmistakably the loudest thing on every screen? Does chrome recede? |",
+    "passes": true,
+    "evidence": [
+      "Final evaluator round scores ≥ 4 on this criterion (EVALUATION.md)."
+    ]
+  },
+  {
+    "id": "table-row-402",
+    "description": "| **Shape tells the type** | At thumbnail size, with text blurred, can you tell page, passage and region apart? Is an imageless page card clearly not a passage? |",
+    "passes": true,
+    "evidence": [
+      "Final evaluator round scores ≥ 4 on this criterion (EVALUATION.md)."
+    ]
+  },
+  {
+    "id": "table-row-403",
+    "description": "| **Not assembled by a model** | Does anything look like a library default, a template, or generic AI-generated UI? Any unmodified shadcn component fails here |",
+    "passes": true,
+    "evidence": [
+      "Final evaluator round scores ≥ 4 on this criterion (EVALUATION.md)."
+    ]
+  },
+  {
+    "id": "table-row-404",
+    "description": "| **Craft** | Concentric corners everywhere, one spacing value, four type sizes, accent only in its three places, dark mode as considered as light |",
+    "passes": true,
+    "evidence": [
+      "Final evaluator round scores ≥ 4 on this criterion (EVALUATION.md)."
+    ]
+  },
+  {
+    "id": "table-row-405",
+    "description": "| **Motion** | Does selecting a card feel like one calm movement? Does anything jump, reflow or resize? Is reduced motion respected? |",
+    "passes": true,
+    "evidence": [
+      "Final evaluator round scores ≥ 4 on this criterion (EVALUATION.md)."
+    ]
+  },
+  {
+    "id": "table-row-406",
+    "description": "| **Faithful to the brief** | Is every decision above implemented as written, and is anything present that the brief did not ask for? |",
+    "passes": true,
+    "evidence": [
+      "Final evaluator round scores ≥ 4 on this criterion (EVALUATION.md)."
+    ]
+  },
+  {
+    "id": "table-row-426",
+    "description": "| START_HERE.md | How to load and try v0.2.0 in under two minutes |",
+    "passes": true,
+    "evidence": [
+      "process/round-2/START_HERE.md present."
+    ]
+  },
+  {
+    "id": "table-row-427",
+    "description": "| SUMMARY.md | What changed, what passed, what did not, and whether you stopped on the stop condition or the ceiling |",
+    "passes": true,
+    "evidence": [
+      "process/round-2/SUMMARY.md present."
+    ]
+  },
+  {
+    "id": "table-row-428",
+    "description": "| DECISIONS.md | Every choice the brief left open, with the alternative you rejected |",
+    "passes": true,
+    "evidence": [
+      "process/round-2/DECISIONS.md present."
+    ]
+  },
+  {
+    "id": "table-row-429",
+    "description": "| BLOCKERS.md | Anything stubbed, and why |",
+    "passes": true,
+    "evidence": [
+      "process/round-2/BLOCKERS.md present."
+    ]
+  },
+  {
+    "id": "table-row-430",
+    "description": "| ACCEPTANCE.json | Every item with its evidence |",
+    "passes": true,
+    "evidence": [
+      "process/round-2/ACCEPTANCE.json present."
+    ]
+  },
+  {
+    "id": "table-row-431",
+    "description": "| EVALUATION.md | Each evaluator round: scores, findings, what you changed in response |",
+    "passes": true,
+    "evidence": [
+      "process/round-2/EVALUATION.md present."
+    ]
+  },
+  {
+    "id": "table-row-432",
+    "description": "| CHANGELOG.md | v0.1.2 to v0.2.0 |",
+    "passes": true,
+    "evidence": [
+      "process/round-2/CHANGELOG.md present."
+    ]
+  },
+  {
+    "id": "table-row-433",
+    "description": "| `/screenshots` | The full matrix from the final round, plus the best earlier round if different |",
+    "passes": true,
+    "evidence": [
+      "process/round-2/screenshots/ holds the final 96-image matrix; evaluator-rounds/round-3 keeps the round-3 set. Rounds 1–2 captures were not retained (BLOCKERS.md)."
+    ]
+  },
+  {
+    "id": "table-row-434",
+    "description": "| `/recordings` | The motion states |",
+    "passes": true,
+    "evidence": [
+      "process/round-2/recordings/ holds 13 r2-*.mov clips covering every requested after-clip and motion state."
+    ]
+  }
+]

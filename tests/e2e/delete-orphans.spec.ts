@@ -1,5 +1,5 @@
 import { test, expect, type BrowserContext } from "@playwright/test";
-import { createGroup, launch, newProfile, removeProfile } from "./helpers";
+import { createGroup, deletePageInHub, expectPagePurged, launch, newProfile, removeProfile } from "./helpers";
 import { startFixtureServer } from "../fixtures/pages";
 
 test("deletion removes legacy orphaned crops while preserving images for surviving cards", async () => {
@@ -40,10 +40,10 @@ test("deletion removes legacy orphaned crops while preserving images for survivi
       };
       request.onerror = () => reject(request.error);
     }), survivingId);
-    await hub.getByRole("button", { name: "Delete A page with no preview" }).click();
-    await hub.getByRole("dialog", { name: /Permanently delete A page with no preview/ })
-      .getByRole("button", { name: "Delete permanently" }).click();
-    await expect(hub.getByRole("status")).toContainText("Permanently deleted 1 reference");
+    const deletedId = await hub.evaluate(async () => Object.values(await chrome.storage.local.get(null))
+      .find(item => item?.url?.endsWith("/no-preview"))?.id as string);
+    await deletePageInHub(hub, "A page with no preview");
+    await expectPagePurged(hub, deletedId);
     const result = await hub.evaluate(async id => new Promise<{ imageKeys: IDBValidKey[]; fragmentKeys: IDBValidKey[] }>((resolve, reject) => {
       const open = indexedDB.open("tab-hub-media", 1);
       open.onsuccess = () => {

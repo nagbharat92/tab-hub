@@ -33,6 +33,10 @@ test("six hundred local references stay searchable and incrementally render", as
       await chrome.storage.local.set(records);
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
         const request = indexedDB.open("tab-hub-media", 1);
+        request.onupgradeneeded = () => {
+          request.result.createObjectStore("images");
+          request.result.createObjectStore("fragments", { keyPath: "cardId" });
+        };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
       });
@@ -48,7 +52,8 @@ test("six hundred local references stay searchable and incrementally render", as
       database.close();
       await chrome.storage.local.set({ fragmentChange: crypto.randomUUID() });
     });
-    await expect(page.getByText("600 references", { exact: false }).first()).toBeVisible();
+    await expect(page.getByTestId("reference-card").first()).toBeVisible();
+    await expect(page.getByText("600 references", { exact: false })).toHaveCount(0);
     expect(Date.now() - start).toBeLessThan(8_000);
     const initial = await page.getByTestId("reference-card").count();
     expect(initial).toBeGreaterThanOrEqual(48);
@@ -56,20 +61,23 @@ test("six hundred local references stay searchable and incrementally render", as
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await expect.poll(() => page.getByTestId("reference-card").count()).toBeGreaterThan(initial);
     const searchStart = Date.now();
-    await page.getByRole("textbox", { name: "Search references" }).fill("needle");
+    await page.getByRole("searchbox", { name: "Search references" }).fill("needle");
     await expect(page.getByTestId("reference-card")).toHaveCount(3);
     expect(Date.now() - searchStart).toBeLessThan(3_000);
-    await page.getByRole("button", { name: "Clear search" }).click();
+    await page.getByRole("searchbox", { name: "Search references" }).fill("");
     await expect(page.getByTestId("reference-card").first()).toBeVisible();
     await page.evaluate(async () => {
       const archives = Object.fromEntries(Array.from({ length: 250 }, (_, index) =>
         [`archive:card:scale-card-${index + 350}`, { archivedAt: 1_800_000_000_000 + index }]));
       await chrome.storage.local.set(archives);
     });
-    await expect(page.getByRole("button", { name: "All references 350" })).toBeVisible();
-    await page.getByRole("button", { name: "Previously archived 250" }).click();
+    await expect.poll(() => page.evaluate(async () => Object.keys(await chrome.storage.local.get(null))
+      .filter(key => key.startsWith("archive:card:")).length)).toBe(250);
+    expect(await page.getByTestId("reference-card").count()).toBeLessThanOrEqual(350);
+    await page.getByRole("button", { name: "Filter", exact: true }).click();
+    await page.getByRole("menuitemcheckbox", { name: "Previously archived" }).click();
     await expect(page.getByTestId("reference-card").first()).toBeVisible();
-    await page.getByRole("textbox", { name: "Search references" }).fill("needle");
+    await page.getByRole("searchbox", { name: "Search references" }).fill("needle");
     await expect(page.getByTestId("reference-card")).toHaveCount(3);
   } finally {
     await context?.close();

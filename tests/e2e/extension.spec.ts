@@ -12,7 +12,9 @@ test("unpacked extension loads and opens its hub without console errors", async 
     page.on("pageerror", error => errors.push(error.message));
     page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
     await page.goto(`chrome-extension://${launched.id}/hub.html`);
-    await expect(page.getByRole("heading", { name: /Keep the thought/ })).toBeVisible();
+    await expect(page.getByText("Save a tab from the Tab Hub button in your toolbar.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "More" })).toBeVisible();
+    await expect(page.getByRole("searchbox")).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
     await context?.close();

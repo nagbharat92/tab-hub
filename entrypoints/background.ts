@@ -1,6 +1,9 @@
 import { captureGroup, captureTab } from "@/src/capture";
 import { markRegion, markText } from "@/src/fragments";
 import { showRegionOverlay } from "@/src/region-overlay";
+import { loadThreads } from "@/src/threads";
+import { resumePendingDeletion } from "@/src/delete";
+import { purgeExpiredSoftDeletes } from "@/src/soft-delete";
 import type { WorkerRequest, WorkerResponse } from "@/src/types";
 
 const pendingRegions = new Map<number, Promise<Awaited<ReturnType<typeof markRegion>>>>();
@@ -18,6 +21,7 @@ function isWorkerRequest(value: unknown): value is WorkerRequest {
       return "pageUrl" in value && typeof value.pageUrl === "string" &&
         "rect" in value && value.rect !== null && typeof value.rect === "object";
     case "open-hub":
+    case "load-threads":
       return true;
     default:
       return false;
@@ -42,7 +46,26 @@ function saveRegion(tabId: number, pageUrl: string, rect: Parameters<typeof mark
   return operation;
 }
 
+async function openHub(): Promise<void> {
+  const url = chrome.runtime.getURL("hub.html");
+  const hubs = await chrome.tabs.query({ url: `${chrome.runtime.getURL("")}*` });
+  const existing = hubs.find(item => item.url?.startsWith(url));
+  if (existing?.id !== undefined) await chrome.tabs.update(existing.id, { active: true });
+  else await chrome.tabs.create({ url });
+}
+
 export default defineBackground(() => {
+  void resumePendingDeletion().then(purgeExpiredSoftDeletes)
+    .catch(error => console.error("Tab Hub: deletion cleanup will retry at next launch.", error));
+  chrome.commands.onCommand.addListener(command => {
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
+      if (command === "open-hub") await openHub();
+      else if (tab?.id !== undefined && command === "save-current-tab") await captureTab(tab.id);
+      else if (tab && command === "save-current-group" && tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
+        await captureGroup(tab.groupId);
+      else if (tab?.id !== undefined && command === "mark-selected-text") await markText(tab.id);
+    }).catch(error => console.error("Tab Hub: shortcut failed; source tabs remain open.", error));
+  });
   chrome.runtime.onInstalled.addListener(details => {
     void (async () => {
       await chrome.contextMenus.removeAll();
@@ -108,8 +131,10 @@ export default defineBackground(() => {
               ? sender.tab?.id !== undefined
                 ? saveRegion(sender.tab.id, message.pageUrl, message.rect)
                 : Promise.reject(new Error("A region must be marked on a live page."))
-              : message.type === "open-hub"
-                ? chrome.tabs.create({ url: chrome.runtime.getURL("hub.html") }).then(() => null)
+              : message.type === "load-threads"
+                ? loadThreads()
+                : message.type === "open-hub"
+                ? openHub().then(() => null)
                 : Promise.reject(new Error("Unknown Tab Hub command."));
     void operation.then(result => respond({ ok: true, result })).catch(error => {
       console.error("Tab Hub:", error);
